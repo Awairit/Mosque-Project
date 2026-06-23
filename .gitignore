@@ -1,0 +1,19 @@
+# Environment files
+.env.example
+
+# Docker configurations
+#docker-compose.yml
+#docker-compose.prod.yml
+
+# Project documentation and review reports
+ARCHITECTURE_REVIEW_V2.md
+CODING_RULES.md
+DEVELOPMENT_ROADMAP.md
+MASTER_PROJECT_STATUS_REPORT.md
+MASTER_PROJECT_STATUS_REPORT_V2.md
+NEXT_PHASE_RECOMMENDATION.md
+PHASE7_FOUNDATION_REVIEW.md
+PRODUCTION_LAUNCH_REVIEW.md
+PROJECT_AUDIT.md
+PROJECT_VISION.md
+TECHNICAL_DEBT_REGISTER.md
