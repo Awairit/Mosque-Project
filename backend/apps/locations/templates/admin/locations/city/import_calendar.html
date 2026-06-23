@@ -1,0 +1,274 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" type="text/css" href="{% static 'admin/css/forms.css' %}" />
+<style>
+    .import-container {
+        max-width: 900px;
+        margin: 20px 0;
+    }
+    .card {
+        background: #fff;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .card h2 {
+        margin-top: 0;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 10px;
+        color: #333;
+    }
+    .error-list {
+        background: #fff8f8;
+        border-left: 4px solid #dd4646;
+        padding: 15px;
+        margin-bottom: 20px;
+        border-radius: 4px;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    .error-list ul {
+        margin: 0;
+        padding-left: 20px;
+    }
+    .error-list li {
+        color: #b02a2a;
+        margin-bottom: 5px;
+        font-family: monospace;
+    }
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+    .stat-box {
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        padding: 15px;
+        border-radius: 4px;
+        text-align: center;
+    }
+    .stat-val {
+        font-size: 24px;
+        font-weight: bold;
+        color: #1e7e34;
+        margin-top: 5px;
+    }
+    .stat-val.skipped {
+        color: #6c757d;
+    }
+    .stat-val.updated {
+        color: #007bff;
+    }
+    .preview-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 15px;
+        font-size: 13px;
+    }
+    .preview-table th, .preview-table td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: left;
+    }
+    .preview-table th {
+        background-color: #f2f2f2;
+        font-weight: bold;
+    }
+    .btn-row {
+        margin-top: 20px;
+        display: flex;
+        gap: 10px;
+    }
+    .button.btn-confirm {
+        background: #28a745;
+        color: white;
+    }
+    .button.btn-confirm:hover {
+        background: #218838;
+    }
+    .button.btn-cancel {
+        background: #6c757d;
+        color: white;
+    }
+    .button.btn-cancel:hover {
+        background: #5a6268;
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+<a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+&rsaquo; <a href="{% url 'admin:app_list' app_label='locations' %}">Locations</a>
+&rsaquo; <a href="{% url 'admin:locations_city_changelist' %}">Cities</a>
+&rsaquo; Import Calendar
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main" class="import-container">
+
+    <h1>Import City Prayer Calendar</h1>
+    
+    <p class="description">
+        Import a year-round daily calendar for a selected city from a CSV file. Timings must be chronologically ordered (Fajr before Sunrise, Sunrise before Dhuhr, etc.).
+    </p>
+
+    {% if error_list %}
+    <div class="error-list">
+        <h3><strong>CSV Validation Failed! Please resolve the following errors:</strong></h3>
+        <ul>
+            {% for err in error_list %}
+            <li>{{ err }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {% if step == "upload" %}
+    <!-- STEP 1: Upload & Validate Form -->
+    <div class="card">
+        <h2>1. Upload CSV File</h2>
+        <form action="" method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="form-row">
+                <label for="id_city" class="required">Select City:</label>
+                <select name="city" id="id_city" required>
+                    <option value="" disabled selected>--------- Select a City ---------</option>
+                    {% for city in cities %}
+                    <option value="{{ city.id }}">{{ city.name }}</option>
+                    {% endfor %}
+                </select>
+                <div class="help">Select the city this calendar belongs to.</div>
+            </div>
+            
+            <div class="form-row">
+                <label for="id_csv_file" class="required">Select CSV File:</label>
+                <input type="file" name="csv_file" id="id_csv_file" accept=".csv" required />
+                <div class="help">Make sure the file headers match the required template formats.</div>
+            </div>
+
+            <div class="submit-row btn-row">
+                <input type="submit" value="Validate and Dry Run" class="default" name="validate" />
+                <a href="{% url 'admin:locations_city_import_calendar' %}?download_template=1" class="button btn-cancel">Download Sample CSV Template</a>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+
+    {% if step == "preview" %}
+    <!-- STEP 2: Preview & Confirm Form -->
+    <div class="card">
+        <h2>2. Validation Successful (Dry-Run Preview)</h2>
+        
+        <p>
+            The CSV file <strong>{{ filename }}</strong> was validated successfully for city <strong>{{ city.name }}</strong>. 
+            Review the dry-run statistics and preview of the first 10 rows below:
+        </p>
+
+        <div class="stats-grid">
+            <div class="stat-box">
+                <div>Rows Processed</div>
+                <div class="stat-val skipped">{{ rows_processed }}</div>
+            </div>
+            <div class="stat-box">
+                <div>Rows to Create</div>
+                <div class="stat-val">{{ rows_created }}</div>
+            </div>
+            <div class="stat-box">
+                <div>Rows to Update</div>
+                <div class="stat-val updated">{{ rows_updated }}</div>
+            </div>
+            <div class="stat-box">
+                <div>Rows Unchanged</div>
+                <div class="stat-val skipped">{{ rows_skipped }}</div>
+            </div>
+        </div>
+
+        <h3>First 10 Rows Preview:</h3>
+        <table class="preview-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Fajr</th>
+                    <th>Sunrise</th>
+                    <th>Dhuhr</th>
+                    <th>Asr</th>
+                    <th>Maghrib</th>
+                    <th>Isha</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in preview %}
+                <tr>
+                    <td>{{ row.date }}</td>
+                    <td>{{ row.fajr_time }}</td>
+                    <td>{{ row.sunrise_time }}</td>
+                    <td>{{ row.dhuhr_time }}</td>
+                    <td>{{ row.asr_time }}</td>
+                    <td>{{ row.maghrib_time }}</td>
+                    <td>{{ row.isha_time }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <form action="" method="post">
+            {% csrf_token %}
+            <input type="hidden" name="city_id" value="{{ city.id }}" />
+            <input type="hidden" name="temp_file" value="{{ temp_file }}" />
+            <input type="hidden" name="filename" value="{{ filename }}" />
+            
+            <div class="btn-row">
+                <input type="submit" value="Confirm and Commit Import" class="button btn-confirm" name="commit" />
+                <a href="{% url 'admin:locations_city_import_calendar' %}" class="button btn-cancel">Cancel / Start Over</a>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+
+    {% if step == "completed" %}
+    <!-- STEP 3: Completed Summary -->
+    <div class="card">
+        <h2>3. Import Completed Successfully</h2>
+        <p>
+            The calendar timings have been committed to the database for city <strong>{{ city.name }}</strong>.
+        </p>
+
+        <div class="stats-grid">
+            <div class="stat-box">
+                <div>Rows Processed</div>
+                <div class="stat-val skipped">{{ log.rows_processed }}</div>
+            </div>
+            <div class="stat-box">
+                <div>Rows Created</div>
+                <div class="stat-val">{{ log.rows_created }}</div>
+            </div>
+            <div class="stat-box">
+                <div>Rows Updated</div>
+                <div class="stat-val updated">{{ log.rows_updated }}</div>
+            </div>
+            <div class="stat-box">
+                <div>Rows Unchanged</div>
+                <div class="stat-val skipped">{{ log.rows_skipped }}</div>
+            </div>
+        </div>
+
+        <p>An audit log has been created under ID <strong>#{{ log.id }}</strong>.</p>
+
+        <div class="btn-row">
+            <a href="{% url 'admin:locations_city_changelist' %}" class="button">Back to Cities List</a>
+            <a href="{% url 'admin:locations_city_import_calendar' %}" class="button">Import Another Calendar</a>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

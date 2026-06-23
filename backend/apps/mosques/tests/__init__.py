@@ -1,0 +1,1 @@
+"""Mosque tests package."""

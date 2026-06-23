@@ -1,0 +1,1 @@
+"""Mosque event domain app."""
