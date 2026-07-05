@@ -8,11 +8,25 @@ from apps.common.models import TimeStampedModel
 
 class City(TimeStampedModel):
     """Geographic city for general city-level prayer timings."""
+    class TimetablePolicy(models.TextChoices):
+        ANNUAL_UPLOAD = "ANNUAL_UPLOAD", "Annual Upload Required"
+        CONTINUE_PREVIOUS = "CONTINUE_PREVIOUS", "Continue Previous Timetable Until Replaced"
+        ASTRONOMICAL = "ASTRONOMICAL", "Astronomical Calculation (Future)"
+        AUTHORITY = "AUTHORITY", "Official Authority Source (Future)"
 
     name = models.CharField(max_length=100, unique=True)
     latitude = models.DecimalField(max_digits=9, decimal_places=6)
     longitude = models.DecimalField(max_digits=9, decimal_places=6)
     timezone = models.CharField(max_length=50, default="Asia/Kolkata")
+    
+    timetable_policy = models.CharField(
+        max_length=30, 
+        choices=TimetablePolicy.choices, 
+        default=TimetablePolicy.ANNUAL_UPLOAD
+    )
+    acknowledged_timetable_year = models.IntegerField(null=True, blank=True)
+    maghrib_congregation_offset = models.IntegerField(default=1)
+    maghrib_auto_congregation_enabled = models.BooleanField(default=True)
 
     class Meta:
         ordering = ["name"]

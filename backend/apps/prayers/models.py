@@ -10,6 +10,10 @@ from apps.mosques.models import Mosque
 class PrayerTiming(TimeStampedModel):
     """Congregation (jamaat) timings for an approved Mosque."""
 
+    class CongregationMode(models.TextChoices):
+        MANUAL = "manual", "Manual Input"
+        CITY_OFFSET = "city_offset", "City Offset"
+
     mosque = models.OneToOneField(
         Mosque,
         on_delete=models.CASCADE,
@@ -22,6 +26,11 @@ class PrayerTiming(TimeStampedModel):
     isha_time = models.TimeField()
     jumuah_time = models.TimeField()
     effective_from = models.DateField()
+    maghrib_congregation_mode = models.CharField(
+        max_length=20,
+        choices=CongregationMode.choices,
+        default=CongregationMode.MANUAL,
+    )
     updated_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,

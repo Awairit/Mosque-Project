@@ -82,10 +82,36 @@ class CityPrayerTimingAPIView(APIView):
 
         # Prioritize daily calendar imports, then fall back to baseline defaults
         daily_timing = CityDailyPrayerTiming.objects.filter(city=resolved_city, date=today).first()
+        
+        # --- Fallback Logic: Generic Date Mapping Strategy ---
+        if not daily_timing:
+            latest_timing = CityDailyPrayerTiming.objects.filter(city=resolved_city).order_by("-date").first()
+            if latest_timing and latest_timing.date.year < today.year:
+                target_year = latest_timing.date.year
+                import calendar
+                try:
+                    fallback_date = today.replace(year=target_year)
+                except ValueError:
+                    # Handles cases like Feb 29 in non-leap years
+                    last_day = calendar.monthrange(target_year, today.month)[1]
+                    fallback_date = today.replace(year=target_year, day=last_day)
+                
+                # Fetch timing for fallback date or nearest earlier date in the same month
+                fallback_timing = CityDailyPrayerTiming.objects.filter(
+                    city=resolved_city,
+                    date__year=target_year,
+                    date__month=today.month,
+                    date__lte=fallback_date
+                ).order_by("-date").first()
+
+                if fallback_timing:
+                    daily_timing = fallback_timing
+
         if daily_timing:
             serializer = CityDailyPrayerTimingSerializer(daily_timing)
             data = serializer.data
             data["city_details"] = CitySerializer(resolved_city).data
+            data["date"] = today.isoformat()  # Hide fallback details from public users
             return Response(data)
 
         # Find specific calendar date first, otherwise fall back to static baseline timing (calendar_date=None)

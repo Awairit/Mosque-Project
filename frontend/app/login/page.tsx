@@ -19,7 +19,7 @@ export default function LoginPage() {
             Access your dashboard.
           </h1>
           <p className="mt-5 max-w-xl leading-7 text-slate-600">
-            Log in with your registered mobile number and temporary password to
+            Log in with your registered WhatsApp number and password to
             manage your mosque&apos;s jamaat timings, facilities, events, and schedules.
           </p>
         </section>

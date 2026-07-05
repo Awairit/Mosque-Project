@@ -154,3 +154,16 @@ REST_FRAMEWORK = {
 
 CORS_ALLOWED_ORIGINS = env("DJANGO_CORS_ALLOWED_ORIGINS", default=[])
 CSRF_TRUSTED_ORIGINS = env("DJANGO_CSRF_TRUSTED_ORIGINS", default=[])
+
+
+# ---------------------------------------------------------------------------
+# OTP Provider Configuration
+# ---------------------------------------------------------------------------
+# Set OTP_PROVIDER=dummy for local development (no credentials required).
+# Set OTP_PROVIDER=twilio for production to use Twilio Verify.
+OTP_PROVIDER = env("OTP_PROVIDER", default="dummy")
+
+TWILIO_ACCOUNT_SID = env("TWILIO_ACCOUNT_SID", default="")
+TWILIO_AUTH_TOKEN = env("TWILIO_AUTH_TOKEN", default="")
+TWILIO_VERIFY_SERVICE_SID = env("TWILIO_VERIFY_SERVICE_SID", default="")
+

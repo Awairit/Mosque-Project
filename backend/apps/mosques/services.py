@@ -193,18 +193,22 @@ class MosqueAvailabilityEngine:
         next_prayer_name = None
         next_prayer_time = None
 
+        from apps.prayers.models import PrayerTiming
         try:
             timing = self.mosque.prayer_timing
         except PrayerTiming.DoesNotExist:
             timing = None
 
-        if timing is not None:
+        from apps.prayers.services import CongregationTimingResolver
+        resolved = CongregationTimingResolver.resolve_prayer_timing(timing, self.current_date)
+
+        if resolved is not None:
             prayers = [
-                ("Fajr", timing.fajr_time),
-                ("Dhuhr", timing.dhuhr_time),
-                ("Asr", timing.asr_time),
-                ("Maghrib", timing.maghrib_time),
-                ("Isha", timing.isha_time),
+                ("Fajr", resolved.fajr_time),
+                ("Dhuhr", resolved.dhuhr_time),
+                ("Asr", resolved.asr_time),
+                ("Maghrib", resolved.maghrib_time),
+                ("Isha", resolved.isha_time),
             ]
             # Find next prayer today
             next_p = None
@@ -216,7 +220,7 @@ class MosqueAvailabilityEngine:
             if next_p is None:
                 # Rollover to tomorrow's Fajr
                 next_prayer_name = "Fajr"
-                next_prayer_time = timing.fajr_time.strftime("%I:%M %p")
+                next_prayer_time = resolved.fajr_time.strftime("%I:%M %p")
             else:
                 next_prayer_name = next_p[0]
                 next_prayer_time = next_p[1].strftime("%I:%M %p")

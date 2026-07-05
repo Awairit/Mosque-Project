@@ -31,7 +31,9 @@ export async function apiRequest<TResponse>({ path, ...init }: ApiRequestOptions
   }
 
   if (typeof window !== "undefined") {
-    const token = localStorage.getItem("auth_token");
+    const isPlatform = path.startsWith("/platform/") || path.startsWith("platform/");
+    const tokenKey = isPlatform ? "super_auth_token" : "auth_token";
+    const token = localStorage.getItem(tokenKey);
     if (token && !headers.has("Authorization")) {
       headers.set("Authorization", `Token ${token}`);
     }

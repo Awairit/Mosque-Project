@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
 
+import { GlobalHeader } from "@/components/layout/GlobalHeader";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="en">
       <body className="flex flex-col min-h-screen">
+        <GlobalHeader />
         <div className="flex-grow">{children}</div>
         <footer className="w-full border-t border-slate-200 bg-white py-6 dark:bg-slate-900 dark:border-slate-800">
           <div className="mx-auto max-w-4xl px-4 flex flex-col items-center justify-between gap-4 sm:flex-row text-xs text-slate-600 dark:text-slate-400">

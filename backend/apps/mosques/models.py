@@ -46,15 +46,34 @@ class Mosque(TimeStampedModel):
     # Extended Profile Fields
     description = models.TextField(blank=True)
     contact_phone = models.CharField(max_length=32, blank=True)
+    contact_email = models.CharField(max_length=254, blank=True)
     website = models.URLField(max_length=255, blank=True)
 
-    # Extended Facilities Fields
+    # Imam Information
+    imam_name = models.CharField(max_length=255, blank=True)
+    imam_contact_number = models.CharField(max_length=32, blank=True)
+
+    # Core Facilities (existing)
     parking_available = models.BooleanField(default=False)
     wudu_facility_available = models.BooleanField(default=False)
     wheelchair_accessible = models.BooleanField(default=False)
     profile_image = models.ImageField(
         upload_to="mosque_profiles/", null=True, blank=True
     )
+
+    # Extended Facilities
+    drinking_water_available = models.BooleanField(default=False)
+    washrooms_available = models.BooleanField(default=False)
+    library_available = models.BooleanField(default=False)
+    quran_classes_available = models.BooleanField(default=False)
+    hifz_program_available = models.BooleanField(default=False)
+    nikah_service_available = models.BooleanField(default=False)
+    muslim_burial_ground_available = models.BooleanField(default=False)
+    community_hall_available = models.BooleanField(default=False)
+    ramadan_iftar_available = models.BooleanField(default=False)
+    eid_prayer_ground_available = models.BooleanField(default=False)
+    zakat_collection_available = models.BooleanField(default=False)
+    funeral_prayer_facility_available = models.BooleanField(default=False)
 
     # Future Compatibility & Extra Features
     mosque_type = models.CharField(
@@ -110,7 +129,10 @@ class MosqueRegistrationRequest(TimeStampedModel):
     """Public request submitted by someone who wants to register a mosque."""
 
     class Status(models.TextChoices):
-        PENDING = "pending", "Pending"
+        DRAFT = "draft", "Draft"
+        WHATSAPP_VERIFIED = "whatsapp_verified", "WhatsApp Verified"
+        PENDING = "pending", "Pending Review"
+        UNDER_VERIFICATION = "under_verification", "Under Verification"
         APPROVED = "approved", "Approved"
         REJECTED = "rejected", "Rejected"
 
@@ -131,12 +153,55 @@ class MosqueRegistrationRequest(TimeStampedModel):
     google_maps_url = models.URLField(max_length=500, blank=True, null=True)
     women_prayer_available = models.BooleanField(default=False)
     notes = models.TextField(blank=True)
+
+    # Contact & Imam Information
+    email = models.CharField(max_length=254, blank=True)
+    imam_name = models.CharField(max_length=255, blank=True)
+
+    # WhatsApp / Mobile Verification
+    mobile_verified = models.BooleanField(default=False)
+    whatsapp_verified = models.BooleanField(default=False)
+    whatsapp_verified_at = models.DateTimeField(null=True, blank=True)
+    verification_method = models.CharField(max_length=50, blank=True)
+    verification_timestamp = models.DateTimeField(null=True, blank=True)
+
+    # Super Admin Workflow
+    under_verification_at = models.DateTimeField(null=True, blank=True)
+    under_verification_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="under_verification_requests",
+    )
+    super_admin_notes = models.TextField(
+        blank=True,
+        help_text="Internal verification notes. Never visible publicly. E.g. 'Verified via WhatsApp call.'",
+    )
+
     status = models.CharField(
-        max_length=20,
+        max_length=25,
         choices=Status.choices,
-        default=Status.PENDING,
+        default=Status.DRAFT,
         db_index=True,
     )
+    approved_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approved_requests",
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    rejected_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="rejected_requests",
+    )
+    rejected_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(blank=True)
 
     class Meta:
         ordering = ["-created_at"]
@@ -317,7 +382,7 @@ class MosquePhoto(TimeStampedModel):
 
 
 class MosqueAnnouncement(TimeStampedModel):
-    """Operational announcement / notice board entry for a Mosque."""
+    """Operational announcement / notice board entry for a Mosque or City."""
 
     class Priority(models.TextChoices):
         NORMAL = "normal", "Normal"
@@ -329,13 +394,41 @@ class MosqueAnnouncement(TimeStampedModel):
         PUBLISHED = "published", "Published"
         ARCHIVED = "archived", "Archived"
 
+    class AnnouncementType(models.TextChoices):
+        GENERAL = "general", "General"
+        RAMADAN = "ramadan", "Ramadan"
+        EID = "eid", "Eid"
+        PRAYER_CHANGE = "prayer_change", "Prayer Change"
+        EMERGENCY = "emergency", "Emergency"
+        WEATHER = "weather", "Weather"
+        COMMUNITY = "community", "Community"
+        CHARITY = "charity", "Charity"
+        EDUCATION = "education", "Education"
+        LOST_FOUND = "lost_found", "Lost & Found"
+
     mosque = models.ForeignKey(
         Mosque,
         on_delete=models.CASCADE,
         related_name="announcements",
+        null=True,
+        blank=True,
+    )
+    city = models.ForeignKey(
+        "locations.City",
+        on_delete=models.CASCADE,
+        related_name="announcements",
+        null=True,
+        blank=True,
     )
     title = models.CharField(max_length=255)
-    content = models.TextField()
+    short_summary = models.CharField(max_length=255, blank=True)
+    content = models.TextField() # Full Description
+    banner_image = models.CharField(max_length=500, blank=True)
+    announcement_type = models.CharField(
+        max_length=50,
+        choices=AnnouncementType.choices,
+        default=AnnouncementType.GENERAL,
+    )
     priority = models.CharField(
         max_length=20,
         choices=Priority.choices,
@@ -348,6 +441,7 @@ class MosqueAnnouncement(TimeStampedModel):
     )
     start_date = models.DateField()
     end_date = models.DateField()
+    publish_date = models.DateField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     created_by = models.ForeignKey(
         User,
@@ -364,11 +458,12 @@ class MosqueAnnouncement(TimeStampedModel):
         ]
 
     def __str__(self) -> str:
-        return f"{self.title} ({self.priority}) - {self.mosque.mosque_name}"
+        target = self.mosque.mosque_name if self.mosque else (self.city.name if self.city else "Global")
+        return f"{self.title} ({self.priority}) - {target}"
 
 
 class MosqueEvent(TimeStampedModel):
-    """Upcoming event or activity scheduled at a Mosque."""
+    """Upcoming event or activity scheduled at a Mosque or City."""
 
     class EventType(models.TextChoices):
         LECTURE = "lecture", "Lecture"
@@ -389,6 +484,15 @@ class MosqueEvent(TimeStampedModel):
         Mosque,
         on_delete=models.CASCADE,
         related_name="events",
+        null=True,
+        blank=True,
+    )
+    city = models.ForeignKey(
+        "locations.City",
+        on_delete=models.CASCADE,
+        related_name="events",
+        null=True,
+        blank=True,
     )
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True)
@@ -403,9 +507,14 @@ class MosqueEvent(TimeStampedModel):
         default=Status.DRAFT,
     )
     event_date = models.DateField()
-    event_time = models.TimeField()
+    event_time = models.TimeField() # Start Time
+    end_time = models.TimeField(null=True, blank=True)
     event_location = models.CharField(max_length=255, blank=True)
     speaker_name = models.CharField(max_length=255, blank=True)
+    registration_required = models.BooleanField(default=False)
+    max_capacity = models.IntegerField(null=True, blank=True)
+    banner = models.CharField(max_length=500, blank=True)
+    attachments = models.JSONField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     created_by = models.ForeignKey(
         User,
@@ -422,7 +531,8 @@ class MosqueEvent(TimeStampedModel):
         ]
 
     def __str__(self) -> str:
-        return f"{self.title} on {self.event_date} - {self.mosque.mosque_name}"
+        target = self.mosque.mosque_name if self.mosque else (self.city.name if self.city else "Global")
+        return f"{self.title} on {self.event_date} - {target}"
 
 
 class CommunitySchedule(TimeStampedModel):
@@ -456,3 +566,92 @@ class CommunitySchedule(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.get_schedule_type_display()} on {self.event_date} by {self.speaker}"
+
+
+class NotificationJob(TimeStampedModel):
+    class Priority(models.TextChoices):
+        LOW = "low", "Low"
+        NORMAL = "normal", "Normal"
+        HIGH = "high", "High"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        SENT = "sent", "Sent"
+        FAILED = "failed", "Failed"
+
+    recipient = models.CharField(max_length=255)
+    channel = models.CharField(max_length=50) # e.g. whatsapp, sms, email, push, in_app
+    title = models.CharField(max_length=255, blank=True)
+    message = models.TextField()
+    priority = models.CharField(max_length=20, choices=Priority.choices, default=Priority.NORMAL)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    error_message = models.TextField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["-priority", "-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.channel} job for {self.recipient} - status: {self.status}"
+
+
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+
+@receiver(post_save, sender=MosqueAnnouncement)
+def handle_announcement_published(sender, instance, created, **kwargs):
+    if instance.status == "published" and instance.is_active:
+        priority = NotificationJob.Priority.HIGH if instance.announcement_type == "emergency" else NotificationJob.Priority.NORMAL
+        recipient = "+919999999999"
+        message = f"Announcement: {instance.title} - {instance.short_summary or instance.content[:100]}"
+        
+        if not NotificationJob.objects.filter(
+            recipient=recipient,
+            title=instance.title,
+            channel="whatsapp"
+        ).exists():
+            job = NotificationJob.objects.create(
+                recipient=recipient,
+                channel="whatsapp",
+                title=instance.title,
+                message=message,
+                priority=priority,
+                status=NotificationJob.Status.PENDING
+            )
+            from apps.common.services.notification import notification_service
+            success = notification_service.send_whatsapp(recipient, message)
+            if success:
+                job.status = NotificationJob.Status.SENT
+            else:
+                job.status = NotificationJob.Status.FAILED
+                job.error_message = "Failed to dispatch via notification_service."
+            job.save()
+
+
+@receiver(post_save, sender=MosqueEvent)
+def handle_event_published(sender, instance, created, **kwargs):
+    if instance.status == "published" and instance.is_active:
+        priority = NotificationJob.Priority.NORMAL
+        recipient = "+919999999999"
+        message = f"New Event: {instance.title} scheduled on {instance.event_date} at {instance.event_time}"
+        
+        if not NotificationJob.objects.filter(
+            recipient=recipient,
+            title=instance.title,
+            channel="whatsapp"
+        ).exists():
+            job = NotificationJob.objects.create(
+                recipient=recipient,
+                channel="whatsapp",
+                title=instance.title,
+                message=message,
+                priority=priority,
+                status=NotificationJob.Status.PENDING
+            )
+            from apps.common.services.notification import notification_service
+            success = notification_service.send_whatsapp(recipient, message)
+            if success:
+                job.status = NotificationJob.Status.SENT
+            else:
+                job.status = NotificationJob.Status.FAILED
+                job.error_message = "Failed to dispatch via notification_service."
+            job.save()

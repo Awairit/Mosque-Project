@@ -34,16 +34,27 @@ class MosquePhotoSerializer(serializers.ModelSerializer):
 
 
 class MosqueAnnouncementSerializer(serializers.ModelSerializer):
+    city_name = serializers.CharField(source="city.name", read_only=True)
+    mosque_name = serializers.CharField(source="mosque.mosque_name", read_only=True)
+
     class Meta:
         model = MosqueAnnouncement
         fields = (
             "id",
+            "mosque",
+            "mosque_name",
+            "city",
+            "city_name",
             "title",
+            "short_summary",
             "content",
+            "banner_image",
+            "announcement_type",
             "priority",
             "status",
             "start_date",
             "end_date",
+            "publish_date",
             "is_active",
             "created_at",
             "updated_at",
@@ -52,18 +63,30 @@ class MosqueAnnouncementSerializer(serializers.ModelSerializer):
 
 
 class MosqueEventSerializer(serializers.ModelSerializer):
+    city_name = serializers.CharField(source="city.name", read_only=True)
+    mosque_name = serializers.CharField(source="mosque.mosque_name", read_only=True)
+
     class Meta:
         model = MosqueEvent
         fields = (
             "id",
+            "mosque",
+            "mosque_name",
+            "city",
+            "city_name",
             "title",
             "description",
             "event_type",
             "status",
             "event_date",
             "event_time",
+            "end_time",
             "event_location",
             "speaker_name",
+            "registration_required",
+            "max_capacity",
+            "banner",
+            "attachments",
             "is_active",
             "created_at",
             "updated_at",
@@ -72,7 +95,7 @@ class MosqueEventSerializer(serializers.ModelSerializer):
 
 
 class MosqueSerializer(serializers.ModelSerializer):
-    prayer_timing = PrayerTimingSerializer(read_only=True, allow_null=True)
+    prayer_timing = serializers.SerializerMethodField()
     operating_status = serializers.SerializerMethodField()
     distance = serializers.SerializerMethodField()
     photos = serializers.SerializerMethodField()
@@ -98,10 +121,27 @@ class MosqueSerializer(serializers.ModelSerializer):
             "mosque_status",
             "description",
             "contact_phone",
+            "contact_email",
             "website",
+            "imam_name",
+            "imam_contact_number",
+            # Core facilities
             "parking_available",
             "wudu_facility_available",
             "wheelchair_accessible",
+            # Extended facilities
+            "drinking_water_available",
+            "washrooms_available",
+            "library_available",
+            "quran_classes_available",
+            "hifz_program_available",
+            "nikah_service_available",
+            "muslim_burial_ground_available",
+            "community_hall_available",
+            "ramadan_iftar_available",
+            "eid_prayer_ground_available",
+            "zakat_collection_available",
+            "funeral_prayer_facility_available",
             "mosque_type",
             "separate_women_entrance",
             "prayer_timing",
@@ -128,6 +168,29 @@ class MosqueSerializer(serializers.ModelSerializer):
     def get_operating_status(self, obj) -> dict:
         engine = MosqueAvailabilityEngine(obj)
         return engine.get_availability()
+
+    def get_prayer_timing(self, obj) -> dict | None:
+        from apps.prayers.services import CongregationTimingResolver
+        from apps.prayers.serializers import ResolvedPrayerTimingSerializer
+        from apps.prayers.models import PrayerTiming
+        from zoneinfo import ZoneInfo
+        from django.utils import timezone
+        
+        try:
+            timing = obj.prayer_timing
+        except PrayerTiming.DoesNotExist:
+            return None
+            
+        date_val = self.context.get("date")
+        if not date_val:
+            city = obj.city_relation
+            tz_name = city.timezone if (city and city.timezone) else "Asia/Kolkata"
+            date_val = timezone.now().astimezone(ZoneInfo(tz_name)).date()
+            
+        resolved = CongregationTimingResolver.resolve_prayer_timing(timing, date_val)
+        if not resolved:
+            return None
+        return ResolvedPrayerTimingSerializer(resolved).data
 
     def get_distance(self, obj) -> float | None:
         user_lat = self.context.get("lat")
@@ -200,6 +263,8 @@ class MosqueRegistrationRequestSerializer(serializers.ModelSerializer):
             "mosque_name",
             "admin_name",
             "mobile_number",
+            "email",
+            "imam_name",
             "city",
             "address",
             "google_maps_link",
@@ -222,6 +287,31 @@ class MosqueRegistrationRequestSerializer(serializers.ModelSerializer):
         value = value.strip()
         if not value:
             raise serializers.ValidationError("Mobile number is required.")
+            
+        from apps.common.utils.strings import normalize_phone_number
+        try:
+            normalized = normalize_phone_number(value)
+        except ValueError as exc:
+            raise serializers.ValidationError(str(exc))
+            
+        from django.contrib.auth.models import User
+        from django.db.models import Q
+        local_digits = normalized.replace("+91", "")
+        existing_user = User.objects.filter(
+            Q(username=normalized) | Q(username=local_digits)
+        ).first()
+        if existing_user and hasattr(existing_user, 'mosque_admin'):
+            raise serializers.ValidationError("This phone number is already registered.")
+            
+        return normalized
+
+    def validate_email(self, value: str) -> str:
+        value = value.strip() if value else ""
+        if value:
+            from django.contrib.auth.models import User
+            existing_user = User.objects.filter(email=value).exclude(email="").first()
+            if existing_user and hasattr(existing_user, 'mosque_admin'):
+                raise serializers.ValidationError("This email address is already registered.")
         return value
 
     def validate(self, attrs):
@@ -267,16 +357,34 @@ class MosqueProfileSerializer(serializers.ModelSerializer):
             "address",
             "description",
             "contact_phone",
+            "contact_email",
             "website",
+            "imam_name",
+            "imam_contact_number",
             "women_prayer_available",
+            # Core facilities
             "parking_available",
             "wudu_facility_available",
             "wheelchair_accessible",
+            # Extended facilities
+            "drinking_water_available",
+            "washrooms_available",
+            "library_available",
+            "quran_classes_available",
+            "hifz_program_available",
+            "nikah_service_available",
+            "muslim_burial_ground_available",
+            "community_hall_available",
+            "ramadan_iftar_available",
+            "eid_prayer_ground_available",
+            "zakat_collection_available",
+            "funeral_prayer_facility_available",
             "mosque_type",
             "separate_women_entrance",
             "profile_image",
+            "mosque_status",
         )
-        read_only_fields = ("id", "profile_image")
+        read_only_fields = ("id", "profile_image", "mosque_status")
 
     def validate(self, attrs):
         from apps.locations.models import City

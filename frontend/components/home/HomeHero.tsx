@@ -64,6 +64,7 @@ type CityTimings = {
   city_name: string;
   calendar_date: string | null;
   fajr_time: string;
+  sunrise_time?: string | null;
   dhuhr_time: string;
   asr_time: string;
   maghrib_time: string;
@@ -80,6 +81,29 @@ type Prayer = {
   name: string;
   time: string;
   isNext?: boolean;
+};
+
+type Announcement = {
+  id: number;
+  title: string;
+  short_summary: string;
+  content: string;
+  priority: string;
+  announcement_type: string;
+  banner_image?: string;
+  publish_date?: string;
+};
+
+type Event = {
+  id: number;
+  title: string;
+  description: string;
+  event_type: string;
+  event_date: string;
+  event_time: string;
+  end_time?: string;
+  event_location?: string;
+  speaker_name?: string;
 };
 
 const formatTimeTo12Hour = (timeStr?: string | null) => {
@@ -101,6 +125,7 @@ const getNextPrayerIndex = (prayersList: Prayer[]) => {
 
   for (let i = 0; i < prayersList.length; i++) {
     const p = prayersList[i];
+    if (p.name === "Sunrise") continue; // Skip Sunrise as next prayer option
     const parts = p.time.split(" ");
     if (parts.length < 2) continue;
     const timeParts = parts[0].split(":");
@@ -178,6 +203,7 @@ function CurrentPrayerCard({
     if (!cityTimings) return [];
     return [
       { name: "Fajr", time: formatTimeTo12Hour(cityTimings.fajr_time) },
+      { name: "Sunrise", time: formatTimeTo12Hour(cityTimings.sunrise_time) || "No Data" },
       { name: "Dhuhr", time: formatTimeTo12Hour(cityTimings.dhuhr_time) },
       { name: "Asr", time: formatTimeTo12Hour(cityTimings.asr_time) },
       { name: "Maghrib", time: formatTimeTo12Hour(cityTimings.maghrib_time) },
@@ -234,33 +260,47 @@ function CurrentPrayerCard({
       </div>
 
       {isLoading ? (
-        <div className="mt-5 rounded-xl bg-slate-50 py-6 text-center text-sm text-slate-400">
-          Loading timings...
+        <div className="mt-5 grid grid-cols-6 gap-1.5 animate-pulse">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="rounded-xl bg-slate-50 py-3.5 text-center border border-slate-100/50">
+              <div className="mx-auto h-2 w-6 rounded bg-slate-200" />
+              <div className="mx-auto mt-2 h-3.5 w-10 rounded bg-slate-200" />
+            </div>
+          ))}
         </div>
       ) : hasError || !cityTimings ? (
         <div className="mt-5 rounded-xl bg-red-50 py-6 text-center text-sm text-red-800">
           Failed to load city timings.
         </div>
       ) : (
-        <div className="mt-5 grid grid-cols-5 gap-1.5">
-          {activePrayers.map((prayer) => (
-            <div
-              key={prayer.name}
-              className={
-                prayer.isNext
-                  ? "rounded-xl bg-emerald-800 px-1 py-2.5 text-center text-white"
-                  : "rounded-xl bg-slate-50 px-1 py-2.5 text-center text-slate-700"
-              }
-            >
-              <p className="text-[10px] font-medium">{prayer.name}</p>
-              <p className="mt-1 font-mono text-[11px] font-semibold tabular-nums leading-none sm:text-xs">
-                {prayer.time.split(" ")[0]}
-                <span className="block text-[8px] font-sans font-normal opacity-85 mt-0.5">
-                  {prayer.time.split(" ")[1]}
-                </span>
-              </p>
-            </div>
-          ))}
+        <div className="mt-5 grid grid-cols-6 gap-1.5">
+          {activePrayers.map((prayer) => {
+            const isTimeUnavailable = prayer.time === "No Data";
+            return (
+              <div
+                key={prayer.name}
+                className={
+                  prayer.isNext
+                    ? "rounded-xl bg-emerald-800 px-1 py-2.5 text-center text-white"
+                    : "rounded-xl bg-slate-50 px-1 py-2.5 text-center text-slate-700"
+                }
+              >
+                <p className="text-[10px] font-medium">{prayer.name}</p>
+                <div className={`mt-1.5 leading-none font-semibold ${
+                  isTimeUnavailable 
+                    ? "text-[9px] font-sans text-slate-400 dark:text-slate-500" 
+                    : "font-mono text-[11px] tabular-nums sm:text-xs"
+                }`}>
+                  {isTimeUnavailable ? "No Data" : prayer.time.split(" ")[0]}
+                  {!isTimeUnavailable && (
+                    <span className="block text-[8px] font-sans font-normal opacity-85 mt-0.5">
+                      {prayer.time.split(" ")[1]}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </section>
@@ -356,8 +396,24 @@ function ApprovedMosquesCard({ mosques, isLoading, hasError }: ApprovedMosquesCa
 
       <div className="mt-4 space-y-3">
         {isLoading ? (
-          <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
-            Loading approved mosques...
+          <div className="space-y-3 animate-pulse">
+            {[1, 2].map((i) => (
+              <div key={i} className="rounded-xl border border-slate-100/60 p-4 bg-slate-50/50 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="h-4 w-32 rounded bg-slate-200" />
+                  <div className="h-4.5 w-20 rounded bg-slate-200" />
+                </div>
+                <div className="h-3 w-3/4 rounded bg-slate-200" />
+                <div className="h-8 w-full rounded bg-slate-200" />
+                <div className="flex items-center justify-between gap-3 pt-1">
+                  <div className="h-3 w-20 rounded bg-slate-200" />
+                  <div className="flex gap-2">
+                    <div className="h-4.5 w-16 rounded bg-slate-200" />
+                    <div className="h-4.5 w-20 rounded bg-slate-200" />
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         ) : null}
 
@@ -368,8 +424,14 @@ function ApprovedMosquesCard({ mosques, isLoading, hasError }: ApprovedMosquesCa
         ) : null}
 
         {!isLoading && !hasError && mosques.length === 0 ? (
-          <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
-            No approved mosques match your filters.
+          <div className="rounded-xl bg-slate-50 p-4 text-center text-sm text-slate-600 border border-dashed border-slate-200">
+            <p>No approved mosques found nearby matching your filters.</p>
+            <p className="mt-2 text-xs font-semibold text-slate-500">
+              Know a mosque?{" "}
+              <Link href="/mosque-registration" className="text-emerald-800 underline hover:text-emerald-950 transition">
+                Register it here
+              </Link>
+            </p>
           </div>
         ) : null}
 
@@ -516,6 +578,11 @@ export function HomeHero() {
   const [loadingMosques, setLoadingMosques] = useState(true);
   const [mosquesError, setMosquesError] = useState(false);
 
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [loadingAnnouncements, setLoadingAnnouncements] = useState(false);
+  const [loadingEvents, setLoadingEvents] = useState(false);
+
   // Map viewport and mosques state
   const [mapBbox, setMapBbox] = useState<string>("");
   const [mapMosques, setMapMosques] = useState<MosquePreview[]>([]);
@@ -607,6 +674,30 @@ export function HomeHero() {
             setTimingsError(false);
             if (timingResponse.city_details && String(timingResponse.city_details.id) !== selectedCity && locationState === "granted") {
               setSelectedCity(String(timingResponse.city_details.id));
+            }
+
+            // Load announcements and events
+            const cityId = timingResponse.city || timingResponse.city_details?.id;
+            if (cityId) {
+              setLoadingAnnouncements(true);
+              apiRequest<any>({ path: `/public/announcements/?city_id=${cityId}`, cache: "no-store" })
+                .then((res) => {
+                  if (isMounted) setAnnouncements(res || []);
+                })
+                .catch(() => {})
+                .finally(() => {
+                  if (isMounted) setLoadingAnnouncements(false);
+                });
+
+              setLoadingEvents(true);
+              apiRequest<any>({ path: `/public/events/?city_id=${cityId}`, cache: "no-store" })
+                .then((res) => {
+                  if (isMounted) setEvents(res || []);
+                })
+                .catch(() => {})
+                .finally(() => {
+                  if (isMounted) setLoadingEvents(false);
+                });
             }
           }
         } catch {
@@ -726,32 +817,32 @@ export function HomeHero() {
   };
 
   return (
-    <section className="relative isolate overflow-hidden bg-[#F4F7F5] px-4 py-8 sm:px-6 lg:px-8">
+    <section className="relative isolate overflow-hidden bg-[#F4F7F5] px-4 pt-4 pb-8 sm:px-6 sm:pt-6 sm:pb-10 lg:px-8 lg:pt-12 lg:pb-16">
       <div className="absolute inset-x-0 top-0 -z-10 h-64 bg-[radial-gradient(circle_at_top,_rgba(15,95,74,0.16),_transparent_58%)]" />
 
       <div className="mx-auto max-w-6xl">
-        <div className="grid gap-8 lg:min-h-[580px] lg:grid-cols-[1fr_440px] lg:items-center">
-          <div className="pt-6 sm:pt-10">
+        <div className="grid gap-8 lg:gap-16 lg:grid-cols-[1fr_460px]">
+          <div className="pt-2 sm:pt-4 lg:pt-4">
             <p className="inline-flex rounded-full border border-emerald-900/10 bg-white/70 px-4 py-2 text-sm font-medium text-emerald-800 shadow-sm">
               Prayer-aware mosque discovery
             </p>
 
-            <h1 className="mt-6 max-w-3xl text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl lg:text-6xl">
+            <h1 className="mt-5 lg:mt-6 max-w-3xl text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl lg:text-6xl">
               Find a peaceful place to pray, wherever you are.
             </h1>
 
-            <p className="mt-5 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">
+            <p className="mt-4 lg:mt-5 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">
               See nearby mosques, today&apos;s prayer times, jamaat details, women&apos;s prayer support,
               and directions in one calm mobile-first experience.
             </p>
 
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="mt-6 lg:mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
               <LocationButton state={locationState} onClick={handleLocationRequest} />
               <span className="text-xs text-slate-500 font-medium sm:ml-2">Or select below:</span>
             </div>
           </div>
 
-          <div className="grid gap-4 pb-6 lg:pb-0">
+          <div className="grid gap-4 pb-6 lg:pb-0 lg:self-start lg:pt-4">
             <CurrentPrayerCard
               cityTimings={cityTimings}
               isLoading={loadingTimings}
@@ -765,6 +856,157 @@ export function HomeHero() {
               isLoading={loadingMosques}
               hasError={mosquesError}
             />
+          </div>
+        </div>
+
+        {/* City Notice Board & Community Hub */}
+        <div className="mt-12 grid gap-8 md:grid-cols-2 border-t border-slate-200/60 pt-8">
+          {/* Announcements Section */}
+          <div className="bg-white rounded-2xl border border-slate-900/10 p-5 shadow-soft sm:p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">City Notice Board</h3>
+                <p className="text-xs text-slate-500">Official updates, emergency alerts, and announcements</p>
+              </div>
+              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-600/10">
+                {announcements.length} Active
+              </span>
+            </div>
+
+            {loadingAnnouncements ? (
+              <div className="space-y-4">
+                {[1, 2].map((i) => (
+                  <div key={i} className="animate-pulse flex space-x-4">
+                    <div className="flex-1 space-y-3 py-1">
+                      <div className="h-4 bg-slate-200 rounded w-3/4"></div>
+                      <div className="space-y-2">
+                        <div className="h-3 bg-slate-200 rounded"></div>
+                        <div className="h-3 bg-slate-200 rounded w-5/6"></div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : announcements.length === 0 ? (
+              <div className="text-center py-8 text-slate-500 text-sm">
+                No active announcements for this city.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {announcements.map((item) => (
+                  <div
+                    key={item.id}
+                    className="group relative rounded-xl border border-slate-100 bg-slate-50/50 p-4 transition hover:bg-slate-50 hover:shadow-sm"
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium uppercase tracking-wider ${
+                        item.priority === "urgent"
+                          ? "bg-red-50 text-red-800 ring-1 ring-inset ring-red-600/10"
+                          : item.priority === "important"
+                          ? "bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-600/10"
+                          : "bg-slate-100 text-slate-800"
+                      }`}>
+                        {item.priority}
+                      </span>
+                      <span className="text-xs font-semibold uppercase text-emerald-800">
+                        {item.announcement_type}
+                      </span>
+                      {item.publish_date && (
+                        <span className="text-xs text-slate-400 ml-auto">
+                          {item.publish_date}
+                        </span>
+                      )}
+                    </div>
+                    <h4 className="font-semibold text-slate-900 group-hover:text-emerald-950 transition">
+                      {item.title}
+                    </h4>
+                    {item.short_summary && (
+                      <p className="mt-1 text-sm text-slate-600">
+                        {item.short_summary}
+                      </p>
+                    )}
+                    <p className="mt-2 text-xs text-slate-500 whitespace-pre-wrap">
+                      {item.content}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Events Section */}
+          <div className="bg-white rounded-2xl border border-slate-900/10 p-5 shadow-soft sm:p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Upcoming Events</h3>
+                <p className="text-xs text-slate-500">Lectures, programs, and community activities</p>
+              </div>
+              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-600/10">
+                {events.length} Scheduled
+              </span>
+            </div>
+
+            {loadingEvents ? (
+              <div className="space-y-4">
+                {[1, 2].map((i) => (
+                  <div key={i} className="animate-pulse flex space-x-4">
+                    <div className="flex-1 space-y-3 py-1">
+                      <div className="h-4 bg-slate-200 rounded w-3/4"></div>
+                      <div className="space-y-2">
+                        <div className="h-3 bg-slate-200 rounded"></div>
+                        <div className="h-3 bg-slate-200 rounded w-5/6"></div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : events.length === 0 ? (
+              <div className="text-center py-8 text-slate-500 text-sm">
+                No upcoming events scheduled.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {events.map((event) => (
+                  <div
+                    key={event.id}
+                    className="group relative rounded-xl border border-slate-100 bg-slate-50/50 p-4 transition hover:bg-slate-50 hover:shadow-sm"
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800 ring-1 ring-inset ring-emerald-600/10 uppercase">
+                        {event.event_type}
+                      </span>
+                      {event.speaker_name && (
+                        <span className="text-xs text-slate-500">
+                          By: {event.speaker_name}
+                        </span>
+                      )}
+                    </div>
+                    <h4 className="font-semibold text-slate-900 group-hover:text-emerald-950 transition">
+                      {event.title}
+                    </h4>
+                    {event.description && (
+                      <p className="mt-1 text-xs text-slate-600 line-clamp-2">
+                        {event.description}
+                      </p>
+                    )}
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-500 border-t border-slate-100 pt-2">
+                      <div>
+                        <span className="font-semibold text-slate-700">Date:</span> {event.event_date}
+                      </div>
+                      <div>
+                        <span className="font-semibold text-slate-700">Time:</span> {event.event_time}
+                        {event.end_time && ` - ${event.end_time}`}
+                      </div>
+                      {event.event_location && (
+                        <div className="col-span-2">
+                          <span className="font-semibold text-slate-700">Location:</span> {event.event_location}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

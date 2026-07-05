@@ -18,13 +18,29 @@ type ProfileState = {
   address: string;
   description: string;
   contact_phone: string;
+  contact_email: string;
   website: string;
+  imam_name: string;
+  imam_contact_number: string;
   women_prayer_available: boolean;
   parking_available: boolean;
   wudu_facility_available: boolean;
   wheelchair_accessible: boolean;
+  drinking_water_available: boolean;
+  washrooms_available: boolean;
+  library_available: boolean;
+  quran_classes_available: boolean;
+  hifz_program_available: boolean;
+  nikah_service_available: boolean;
+  muslim_burial_ground_available: boolean;
+  community_hall_available: boolean;
+  ramadan_iftar_available: boolean;
+  eid_prayer_ground_available: boolean;
+  zakat_collection_available: boolean;
+  funeral_prayer_facility_available: boolean;
   mosque_type: string;
   separate_women_entrance: boolean;
+  mosque_status?: string;
 };
 
 type ScheduleState = {
@@ -51,6 +67,8 @@ type TimingsState = {
   jumuah_time: string;
   effective_from: string;
   updated_at: string;
+  maghrib_congregation_mode?: string;
+  resolved_maghrib_time?: string;
 };
 
 type PhotoState = {
@@ -146,6 +164,11 @@ export default function DashboardPage() {
   const [loadingAuth, setLoadingAuth] = useState(true);
 
   useEffect(() => {
+    const mustChange = localStorage.getItem("must_change_password");
+    if (mustChange === "true") {
+      router.push("/change-password");
+      return;
+    }
     const token = localStorage.getItem("auth_token");
     const mobile = localStorage.getItem("admin_mobile");
     const mosqueId = localStorage.getItem("admin_mosque_id");
@@ -154,7 +177,7 @@ export default function DashboardPage() {
       setAdmin({ mobile, mosqueId, mosqueName });
     }
     setLoadingAuth(false);
-  }, []);
+  }, [router]);
 
   // Profile Form States
   const [profile, setProfile] = useState<ProfileState>({
@@ -164,13 +187,29 @@ export default function DashboardPage() {
     address: "",
     description: "",
     contact_phone: "",
+    contact_email: "",
     website: "",
+    imam_name: "",
+    imam_contact_number: "",
     women_prayer_available: false,
     parking_available: false,
     wudu_facility_available: false,
     wheelchair_accessible: false,
+    drinking_water_available: false,
+    washrooms_available: false,
+    library_available: false,
+    quran_classes_available: false,
+    hifz_program_available: false,
+    nikah_service_available: false,
+    muslim_burial_ground_available: false,
+    community_hall_available: false,
+    ramadan_iftar_available: false,
+    eid_prayer_ground_available: false,
+    zakat_collection_available: false,
+    funeral_prayer_facility_available: false,
     mosque_type: "jama_masjid",
     separate_women_entrance: false,
+    mosque_status: "inactive",
   });
   const [cities, setCities] = useState<{ id: number; name: string }[]>([]);
   const [loadingProfile, setLoadingProfile] = useState(true);
@@ -212,6 +251,8 @@ export default function DashboardPage() {
     jumuah_time: "",
     effective_from: "",
     updated_at: "",
+    maghrib_congregation_mode: "manual",
+    resolved_maghrib_time: "",
   });
   const [loadingTimings, setLoadingTimings] = useState(true);
   const [savingTimings, setSavingTimings] = useState(false);
@@ -430,6 +471,8 @@ export default function DashboardPage() {
             jumuah_time: formatTimeForInput(data.jumuah_time),
             effective_from: data.effective_from || "",
             updated_at: data.updated_at,
+            maghrib_congregation_mode: data.maghrib_congregation_mode || "manual",
+            resolved_maghrib_time: formatTimeForInput(data.resolved_maghrib_time || data.maghrib_time),
           });
           setLoadingTimings(false);
         }
@@ -688,6 +731,8 @@ export default function DashboardPage() {
         jumuah_time: formatTimeForInput(data.jumuah_time),
         effective_from: data.effective_from || "",
         updated_at: data.updated_at,
+        maghrib_congregation_mode: data.maghrib_congregation_mode || "manual",
+        resolved_maghrib_time: formatTimeForInput(data.resolved_maghrib_time || data.maghrib_time),
       });
       setSuccessTimings("Prayer timings updated successfully!");
     } catch (err) {
@@ -1298,6 +1343,18 @@ export default function DashboardPage() {
     );
   };
 
+  const checklistItems = [
+    { label: "Mosque Approved", isDone: true },
+    { label: "Upload Prayer Timetable", isDone: !!(timings.effective_from) },
+    { label: "Verify Location", isDone: !!(profile.address && profile.city) },
+    { label: "Complete Profile", isDone: !!(profile.description && profile.contact_phone) },
+    { label: "Upload Photos", isDone: photos.length > 0 },
+    { label: "Public Listing Active", isDone: profile.mosque_status === "active" },
+  ];
+
+  const completedCount = checklistItems.filter(item => item.isDone).length;
+  const progressPercent = Math.round((completedCount / checklistItems.length) * 100);
+
   return (
     <main className="min-h-screen bg-[#F4F7F5] px-4 py-8 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-4xl space-y-6">
@@ -1352,6 +1409,52 @@ export default function DashboardPage() {
 
           {/* Right Panels Stack */}
           <div className="space-y-6">
+            {/* Operational Readiness Checklist */}
+            <section className="rounded-2xl border border-slate-900/10 bg-white p-5 shadow-sm sm:p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 font-sans">
+                    Operational Readiness Checklist
+                  </h2>
+                  <p className="text-[11px] text-slate-500 font-normal mt-0.5">
+                    Complete these configuration steps to publish your mosque on our public map directory.
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5 self-start sm:self-center">
+                  <span className="text-sm font-extrabold text-emerald-800">{progressPercent}%</span>
+                  <span className="text-[10px] text-slate-400 font-bold">({completedCount} of 6 complete)</span>
+                </div>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="mt-3 h-2 w-full rounded-full bg-slate-100 overflow-hidden border border-slate-200/40">
+                <div
+                  className="h-full bg-emerald-800 rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+
+              {/* Checklist Grid */}
+              <div className="mt-4.5 grid gap-2.5 sm:grid-cols-2">
+                {checklistItems.map((item, idx) => (
+                  <div key={idx} className="flex items-center gap-2.5 rounded-xl border border-slate-100 bg-slate-50/50 p-3">
+                    {item.isDone ? (
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-800 border border-emerald-100">
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth="3" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </span>
+                    ) : (
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-300 bg-white" />
+                    )}
+                    <span className={`text-[11px] font-bold ${item.isDone ? "text-slate-900" : "text-slate-500"}`}>
+                      {item.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </section>
+
             {/* Panel 1: Mosque Profile */}
             <section className="rounded-2xl border border-slate-900/10 bg-white p-5 shadow-sm sm:p-6">
               <h2 className="text-lg font-semibold text-slate-950">
@@ -1474,23 +1577,95 @@ export default function DashboardPage() {
                     </div>
                   </div>
 
-                  <div>
-                    <label
-                      htmlFor="website"
-                      className="block text-sm font-semibold text-slate-700"
-                    >
-                      Website URL
-                    </label>
-                    <input
-                      id="website"
-                      type="url"
-                      value={profile.website}
-                      onChange={(e) =>
-                        setProfile({ ...profile, website: e.target.value })
-                      }
-                      className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-slate-950 outline-none transition focus:border-emerald-900 focus:ring-4 focus:ring-emerald-900/10"
-                      disabled={savingProfile}
-                    />
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label
+                        htmlFor="contact_email"
+                        className="block text-sm font-semibold text-slate-700"
+                      >
+                        Contact Email
+                        <span className="ml-1 text-xs font-normal text-slate-500">(optional)</span>
+                      </label>
+                      <input
+                        id="contact_email"
+                        type="email"
+                        value={profile.contact_email}
+                        onChange={(e) =>
+                          setProfile({ ...profile, contact_email: e.target.value })
+                        }
+                        className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-slate-950 outline-none transition focus:border-emerald-900 focus:ring-4 focus:ring-emerald-900/10"
+                        disabled={savingProfile}
+                        placeholder="mosque@example.com"
+                      />
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="website"
+                        className="block text-sm font-semibold text-slate-700"
+                      >
+                        Website URL
+                        <span className="ml-1 text-xs font-normal text-slate-500">(optional)</span>
+                      </label>
+                      <input
+                        id="website"
+                        type="url"
+                        value={profile.website}
+                        onChange={(e) =>
+                          setProfile({ ...profile, website: e.target.value })
+                        }
+                        className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-slate-950 outline-none transition focus:border-emerald-900 focus:ring-4 focus:ring-emerald-900/10"
+                        disabled={savingProfile}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+                    <p className="text-sm font-semibold text-slate-800 mb-3">Imam Information</p>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label
+                          htmlFor="imam_name"
+                          className="block text-sm font-semibold text-slate-700"
+                        >
+                          Imam Name
+                          <span className="ml-1 text-xs font-normal text-slate-500">(optional)</span>
+                        </label>
+                        <input
+                          id="imam_name"
+                          type="text"
+                          value={profile.imam_name}
+                          onChange={(e) =>
+                            setProfile({ ...profile, imam_name: e.target.value })
+                          }
+                          className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-slate-950 outline-none transition focus:border-emerald-900 focus:ring-4 focus:ring-emerald-900/10"
+                          disabled={savingProfile}
+                          placeholder="e.g. Sheikh Abdullah"
+                        />
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor="imam_contact_number"
+                          className="block text-sm font-semibold text-slate-700"
+                        >
+                          Imam Contact Number
+                          <span className="ml-1 text-xs font-normal text-slate-500">(optional)</span>
+                        </label>
+                        <input
+                          id="imam_contact_number"
+                          type="text"
+                          value={profile.imam_contact_number}
+                          onChange={(e) =>
+                            setProfile({ ...profile, imam_contact_number: e.target.value })
+                          }
+                          className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-slate-950 outline-none transition focus:border-emerald-900 focus:ring-4 focus:ring-emerald-900/10"
+                          disabled={savingProfile}
+                          placeholder="+91 98765 43210"
+                        />
+                      </div>
+                    </div>
+                    <p className="mt-2 text-xs text-slate-500">These fields can be updated whenever the Imam changes.</p>
                   </div>
 
                   <div>
@@ -1564,121 +1739,42 @@ export default function DashboardPage() {
                     </div>
                   )}
 
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <label className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50/50 p-3.5">
-                      <input
-                        type="checkbox"
-                        checked={profile.women_prayer_available}
-                        onChange={(e) =>
-                          setProfile({
-                            ...profile,
-                            women_prayer_available: e.target.checked,
-                          })
-                        }
-                        className="mt-1 h-5 w-5 rounded border-slate-300 text-emerald-900 focus:ring-emerald-900"
-                        disabled={savingProfile}
-                      />
-                      <span>
-                        <span className="block text-sm font-semibold text-slate-900">
-                          Women&apos;s Prayer Space
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {([
+                      { key: "women_prayer_available", label: "Women's Prayer Area", desc: "Separate area for ladies to pray." },
+                      { key: "separate_women_entrance", label: "Separate Women's Entrance", desc: "Private entrance for ladies." },
+                      { key: "parking_available", label: "Parking", desc: "Dedicated parking for cars/bikes." },
+                      { key: "wudu_facility_available", label: "Wudu Facility", desc: "Ablution spaces on site." },
+                      { key: "wheelchair_accessible", label: "Wheelchair Accessibility", desc: "Ramps or elevators for wheelchair entry." },
+                      { key: "drinking_water_available", label: "Drinking Water", desc: "Clean drinking water available." },
+                      { key: "washrooms_available", label: "Washrooms", desc: "Toilet facilities on site." },
+                      { key: "library_available", label: "Library", desc: "Islamic books and resources available." },
+                      { key: "quran_classes_available", label: "Quran Classes", desc: "Regular Quran teaching sessions." },
+                      { key: "hifz_program_available", label: "Hifz Program", desc: "Quran memorisation programme." },
+                      { key: "nikah_service_available", label: "Nikah Service", desc: "Marriage ceremony services offered." },
+                      { key: "muslim_burial_ground_available", label: "Muslim Burial Ground", desc: "Islamic burial ground affiliated or nearby." },
+                      { key: "community_hall_available", label: "Community Hall", desc: "Hall available for community events." },
+                      { key: "ramadan_iftar_available", label: "Ramadan Iftar", desc: "Iftar meals provided during Ramadan." },
+                      { key: "eid_prayer_ground_available", label: "Eid Prayer Ground", desc: "Open ground for Eid prayers." },
+                      { key: "zakat_collection_available", label: "Zakat Collection", desc: "Accepts Zakat on behalf of those in need." },
+                      { key: "funeral_prayer_facility_available", label: "Funeral Prayer Facility", desc: "Janazah prayer space available." },
+                    ] as { key: keyof ProfileState; label: string; desc: string }[]).map(({ key, label, desc }) => (
+                      <label key={key} className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50/50 p-3.5 cursor-pointer hover:border-emerald-900/20 transition">
+                        <input
+                          type="checkbox"
+                          checked={!!profile[key]}
+                          onChange={(e) =>
+                            setProfile({ ...profile, [key]: e.target.checked })
+                          }
+                          className="mt-1 h-5 w-5 rounded border-slate-300 text-emerald-900 focus:ring-emerald-900"
+                          disabled={savingProfile}
+                        />
+                        <span>
+                          <span className="block text-sm font-semibold text-slate-900">{label}</span>
+                          <span className="mt-0.5 block text-xs text-slate-500">{desc}</span>
                         </span>
-                        <span className="mt-0.5 block text-xs text-slate-500">
-                          Separate area for ladies to pray.
-                        </span>
-                      </span>
-                    </label>
-
-                    <label className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50/50 p-3.5">
-                      <input
-                        type="checkbox"
-                        checked={profile.separate_women_entrance}
-                        onChange={(e) =>
-                          setProfile({
-                            ...profile,
-                            separate_women_entrance: e.target.checked,
-                          })
-                        }
-                        className="mt-1 h-5 w-5 rounded border-slate-300 text-emerald-900 focus:ring-emerald-900"
-                        disabled={savingProfile}
-                      />
-                      <span>
-                        <span className="block text-sm font-semibold text-slate-900">
-                          Separate Women Entrance
-                        </span>
-                        <span className="mt-0.5 block text-xs text-slate-500">
-                          Has a private entrance for ladies.
-                        </span>
-                      </span>
-                    </label>
-
-                    <label className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50/50 p-3.5">
-                      <input
-                        type="checkbox"
-                        checked={profile.parking_available}
-                        onChange={(e) =>
-                          setProfile({
-                            ...profile,
-                            parking_available: e.target.checked,
-                          })
-                        }
-                        className="mt-1 h-5 w-5 rounded border-slate-300 text-emerald-900 focus:ring-emerald-900"
-                        disabled={savingProfile}
-                      />
-                      <span>
-                        <span className="block text-sm font-semibold text-slate-900">
-                          Parking Available
-                        </span>
-                        <span className="mt-0.5 block text-xs text-slate-500">
-                          Dedicated parking area for cars/bikes.
-                        </span>
-                      </span>
-                    </label>
-
-                    <label className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50/50 p-3.5">
-                      <input
-                        type="checkbox"
-                        checked={profile.wudu_facility_available}
-                        onChange={(e) =>
-                          setProfile({
-                            ...profile,
-                            wudu_facility_available: e.target.checked,
-                          })
-                        }
-                        className="mt-1 h-5 w-5 rounded border-slate-300 text-emerald-900 focus:ring-emerald-900"
-                        disabled={savingProfile}
-                      />
-                      <span>
-                        <span className="block text-sm font-semibold text-slate-900">
-                          Wudu Facility Available
-                        </span>
-                        <span className="mt-0.5 block text-xs text-slate-500">
-                          Ablution spaces configured on site.
-                        </span>
-                      </span>
-                    </label>
-
-                    <label className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50/50 p-3.5 sm:col-span-2">
-                      <input
-                        type="checkbox"
-                        checked={profile.wheelchair_accessible}
-                        onChange={(e) =>
-                          setProfile({
-                            ...profile,
-                            wheelchair_accessible: e.target.checked,
-                          })
-                        }
-                        className="mt-1 h-5 w-5 rounded border-slate-300 text-emerald-900 focus:ring-emerald-900"
-                        disabled={savingProfile}
-                      />
-                      <span>
-                        <span className="block text-sm font-semibold text-slate-900">
-                          Wheelchair Accessible
-                        </span>
-                        <span className="mt-0.5 block text-xs text-slate-500">
-                          Ramps or elevators supporting wheelchair entry.
-                        </span>
-                      </span>
-                    </label>
+                      </label>
+                    ))}
                   </div>
 
                   <button
@@ -2089,14 +2185,32 @@ export default function DashboardPage() {
                       <input
                         id="maghrib_time"
                         type="time"
-                        value={timings.maghrib_time}
+                        value={timings.maghrib_congregation_mode === "city_offset" ? (timings.resolved_maghrib_time || timings.maghrib_time) : timings.maghrib_time}
                         onChange={(e) =>
-                          setTimings({ ...timings, maghrib_time: e.target.value })
+                          setTimings({ ...timings, maghrib_time: e.target.value, maghrib_congregation_mode: "manual" })
                         }
-                        className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-slate-950 outline-none transition focus:border-emerald-900 focus:ring-4 focus:ring-emerald-900/10"
-                        disabled={savingTimings}
+                        className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-slate-950 outline-none transition focus:border-emerald-900 focus:ring-4 focus:ring-emerald-900/10 disabled:bg-slate-100 disabled:text-slate-500"
+                        disabled={savingTimings || timings.maghrib_congregation_mode === "city_offset"}
                         required
                       />
+                      <div className="mt-2 flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="maghrib_auto_congregation"
+                          checked={timings.maghrib_congregation_mode === "city_offset"}
+                          onChange={(e) => {
+                            setTimings({
+                              ...timings,
+                              maghrib_congregation_mode: e.target.checked ? "city_offset" : "manual"
+                            });
+                          }}
+                          disabled={savingTimings}
+                          className="rounded border-slate-300 text-emerald-900 focus:ring-emerald-900/20"
+                        />
+                        <label htmlFor="maghrib_auto_congregation" className="text-xs text-slate-500 font-semibold select-none cursor-pointer">
+                          Auto-calculate Maghrib (+1 min after Adhan)
+                        </label>
+                      </div>
                     </div>
 
                     <div>

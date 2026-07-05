@@ -120,3 +120,151 @@ class PrayerTimingAPITests(APITestCase):
         response = self.client.put(self.timings_url, {"fajr_time": "not-a-time"})
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("fajr_time", response.data)
+
+    def test_time_arithmetic_rollover(self):
+        from apps.prayers.services import add_minutes_to_time
+        from datetime import time
+        
+        # Test normal addition
+        self.assertEqual(add_minutes_to_time(time(18, 45), 1), time(18, 46))
+        self.assertEqual(add_minutes_to_time(time(18, 45), 5), time(18, 50))
+        
+        # Test hour rollover boundary
+        self.assertEqual(add_minutes_to_time(time(18, 59), 1), time(19, 0))
+        self.assertEqual(add_minutes_to_time(time(18, 59), 2), time(19, 1))
+        
+        # Test day rollover boundary
+        self.assertEqual(add_minutes_to_time(time(23, 59), 2), time(0, 1))
+        
+        # Test zero offset
+        self.assertEqual(add_minutes_to_time(time(18, 45), 0), time(18, 45))
+
+    def test_congregation_timing_resolver_modes(self):
+        from apps.locations.models import City, CityDailyPrayerTiming
+        from apps.prayers.services import CongregationTimingResolver
+        from datetime import time, date
+
+        # Setup city and daily timetable
+        city = City.objects.create(
+            name="Test City",
+            latitude="19.160000",
+            longitude="77.310000",
+            timezone="Asia/Kolkata",
+            maghrib_congregation_offset=2,
+            maghrib_auto_congregation_enabled=True,
+        )
+        self.mosque_a.city_relation = city
+        self.mosque_a.save()
+
+        target_date = date(2026, 7, 5)
+        CityDailyPrayerTiming.objects.create(
+            city=city,
+            date=target_date,
+            fajr_time=time(5, 0),
+            sunrise_time=time(6, 0),
+            dhuhr_time=time(12, 30),
+            asr_time=time(16, 0),
+            maghrib_time=time(18, 45),
+            isha_time=time(20, 0),
+        )
+
+        timing = PrayerTiming.objects.create(
+            mosque=self.mosque_a,
+            fajr_time=time(5, 15),
+            dhuhr_time=time(13, 0),
+            asr_time=time(17, 0),
+            maghrib_time=time(19, 15),  # Manual override
+            isha_time=time(20, 30),
+            jumuah_time=time(13, 30),
+            effective_from=target_date,
+            maghrib_congregation_mode=PrayerTiming.CongregationMode.CITY_OFFSET,
+        )
+
+        # 1. Test CITY_OFFSET resolves dynamically (18:45 + 2 mins = 18:47)
+        resolved = CongregationTimingResolver.resolve_prayer_timing(timing, target_date)
+        self.assertEqual(resolved.maghrib_time, time(18, 47))
+        self.assertEqual(resolved.maghrib_congregation_mode, "city_offset")
+
+        # 2. Test MANUAL mode preserves the manual override value (19:15)
+        timing.maghrib_congregation_mode = PrayerTiming.CongregationMode.MANUAL
+        timing.save()
+        resolved = CongregationTimingResolver.resolve_prayer_timing(timing, target_date)
+        self.assertEqual(resolved.maghrib_time, time(19, 15))
+
+        # 3. Test city-level configuration disabled (falls back to manual timing)
+        timing.maghrib_congregation_mode = PrayerTiming.CongregationMode.CITY_OFFSET
+        timing.save()
+        city.maghrib_auto_congregation_enabled = False
+        city.save()
+        resolved = CongregationTimingResolver.resolve_prayer_timing(timing, target_date)
+        self.assertEqual(resolved.maghrib_time, time(19, 15))
+
+    def test_api_timings_mode_switching_and_preservation(self):
+        from apps.locations.models import City, CityDailyPrayerTiming
+        from datetime import time, date
+        from zoneinfo import ZoneInfo
+        from django.utils import timezone
+        
+        city = City.objects.create(
+            name="API Test City",
+            latitude="19.160000",
+            longitude="77.310000",
+            timezone="Asia/Kolkata",
+            maghrib_congregation_offset=1,
+            maghrib_auto_congregation_enabled=True,
+        )
+        self.mosque_a.city_relation = city
+        self.mosque_a.save()
+
+        # Mock timetable using timezone-aware current date
+        tz = ZoneInfo("Asia/Kolkata")
+        today_date = timezone.now().astimezone(tz).date()
+        
+        CityDailyPrayerTiming.objects.create(
+            city=city,
+            date=today_date,
+            fajr_time=time(5, 0),
+            sunrise_time=time(6, 0),
+            dhuhr_time=time(12, 30),
+            asr_time=time(16, 0),
+            maghrib_time=time(18, 45),
+            isha_time=time(20, 0),
+        )
+
+        self.client.force_authenticate(user=self.user_a)
+
+        # Perform initial PUT saving manual values
+        update_data = {
+            "fajr_time": "05:15:00",
+            "dhuhr_time": "13:30:00",
+            "asr_time": "17:00:00",
+            "maghrib_time": "19:15:00",
+            "isha_time": "20:30:00",
+            "jumuah_time": "13:30:00",
+            "effective_from": str(today_date),
+            "maghrib_congregation_mode": "manual",
+        }
+        response = self.client.put(self.timings_url, update_data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["maghrib_congregation_mode"], "manual")
+        self.assertEqual(response.data["maghrib_time"], "19:15:00")
+        self.assertEqual(response.data["resolved_maghrib_time"], "19:15:00")
+
+        # Switch to AUTO city_offset mode
+        update_data["maghrib_congregation_mode"] = "city_offset"
+        response = self.client.put(self.timings_url, update_data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["maghrib_congregation_mode"], "city_offset")
+        
+        # maghrib_time remains the manual input in DB, but resolved_maghrib_time becomes 18:46:00
+        self.assertEqual(response.data["maghrib_time"], "19:15:00")
+        self.assertEqual(response.data["resolved_maghrib_time"], "18:46:00")
+
+        # Switch back to manual - should restore 19:15:00
+        update_data["maghrib_congregation_mode"] = "manual"
+        response = self.client.put(self.timings_url, update_data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["maghrib_congregation_mode"], "manual")
+        self.assertEqual(response.data["maghrib_time"], "19:15:00")
+        self.assertEqual(response.data["resolved_maghrib_time"], "19:15:00")
+

@@ -107,11 +107,26 @@ type MosqueDetail = {
   wudu_facility_available: boolean;
   wheelchair_accessible: boolean;
   separate_women_entrance: boolean;
+  drinking_water_available: boolean;
+  washrooms_available: boolean;
+  library_available: boolean;
+  quran_classes_available: boolean;
+  hifz_program_available: boolean;
+  nikah_service_available: boolean;
+  muslim_burial_ground_available: boolean;
+  community_hall_available: boolean;
+  ramadan_iftar_available: boolean;
+  eid_prayer_ground_available: boolean;
+  zakat_collection_available: boolean;
+  funeral_prayer_facility_available: boolean;
   mosque_status: string;
   description: string;
   contact_phone: string;
+  contact_email?: string | null;
   website: string;
   mosque_type: string;
+  imam_name?: string | null;
+  imam_contact_number?: string | null;
   prayer_timing?: PrayerTiming | null;
   operating_status?: OperatingStatus | null;
   distance?: number | null;
@@ -371,6 +386,14 @@ export default function MosqueDetailPage() {
                 Call Mosque
               </a>
             )}
+            {mosque.contact_email && (
+              <a
+                href={`mailto:${mosque.contact_email}`}
+                className="inline-flex min-h-11 items-center justify-center rounded-full border border-slate-200 bg-white px-6 text-sm font-semibold text-slate-800 hover:bg-slate-50 transition"
+              >
+                Email Mosque
+              </a>
+            )}
             {mosque.website && (
               <a
                 href={mosque.website}
@@ -384,10 +407,10 @@ export default function MosqueDetailPage() {
           </div>
         </section>
 
-        {/* 2. Photo Gallery */}
-        <section className="rounded-2xl border border-slate-900/10 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-bold text-slate-950">Photo Gallery</h2>
-          {mosque.photos && mosque.photos.length > 0 ? (
+        {/* 2. Photo Gallery — only rendered when photos exist */}
+        {mosque.photos && mosque.photos.length > 0 && (
+          <section className="rounded-2xl border border-slate-900/10 bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-bold text-slate-950">Photo Gallery</h2>
             <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
               {mosque.photos.map((photo, index) => (
                 <button
@@ -410,15 +433,8 @@ export default function MosqueDetailPage() {
                 </button>
               ))}
             </div>
-          ) : (
-            <div className="mt-4 flex min-h-[140px] items-center justify-center rounded-xl bg-slate-50/50 border border-dashed border-slate-200 text-center p-6 text-slate-400">
-              <div>
-                <span className="block text-2xl mb-1">📸</span>
-                <p className="text-sm font-medium">No photos have been uploaded for this mosque yet.</p>
-              </div>
-            </div>
-          )}
-        </section>
+          </section>
+        )}
 
         <div className="grid gap-6 md:grid-cols-[1fr_320px]">
           {/* Main Info Columns */}
@@ -938,31 +954,47 @@ export default function MosqueDetailPage() {
               )}
             </section>
 
-            {/* 4. Facilities Checklist */}
-            <section className="rounded-2xl border border-slate-900/10 bg-white p-6 shadow-sm">
-              <h2 className="text-lg font-bold text-slate-950">Facilities & Accommodation</h2>
-              <p className="mt-1 text-xs text-slate-500">Accommodations supported by this mosque.</p>
-
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                {[
-                  { name: "Women's Prayer Space", status: mosque.women_prayer_available, icon: "🚺" },
-                  { name: "Separate Ladies Entrance", status: mosque.separate_women_entrance, icon: "🚪" },
-                  { name: "Dedicated Parking Area", status: mosque.parking_available, icon: "🚗" },
-                  { name: "Ablution (Wudu) Space", status: mosque.wudu_facility_available, icon: "💧" },
-                  { name: "Wheelchair Accessibility", status: mosque.wheelchair_accessible, icon: "♿" },
-                ].map((f) => (
-                  <div key={f.name} className="flex items-center gap-2.5 rounded-xl border border-slate-100 bg-slate-50/50 p-3 text-sm">
-                    <span className="text-lg">{f.icon}</span>
-                    <div className="flex-1">
-                      <span className="block font-semibold text-slate-800 leading-tight">{f.name}</span>
-                    </div>
-                    <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${f.status ? "bg-emerald-50 text-emerald-800" : "bg-slate-100 text-slate-400"}`}>
-                      {f.status ? "Available" : "No"}
-                    </span>
+            {/* 4. Facilities — conditional: only shown when at least one is enabled */}
+            {(() => {
+              const allFacilities = [
+                { name: "Women's Prayer Area", key: "women_prayer_available" as const, icon: "🚺" },
+                { name: "Separate Women's Entrance", key: "separate_women_entrance" as const, icon: "🚪" },
+                { name: "Parking", key: "parking_available" as const, icon: "🚗" },
+                { name: "Wudu Facility", key: "wudu_facility_available" as const, icon: "💧" },
+                { name: "Wheelchair Accessibility", key: "wheelchair_accessible" as const, icon: "♿" },
+                { name: "Drinking Water", key: "drinking_water_available" as const, icon: "🚰" },
+                { name: "Washrooms", key: "washrooms_available" as const, icon: "🚻" },
+                { name: "Library", key: "library_available" as const, icon: "📚" },
+                { name: "Quran Classes", key: "quran_classes_available" as const, icon: "📖" },
+                { name: "Hifz Program", key: "hifz_program_available" as const, icon: "🕌" },
+                { name: "Nikah Service", key: "nikah_service_available" as const, icon: "💍" },
+                { name: "Muslim Burial Ground", key: "muslim_burial_ground_available" as const, icon: "🌿" },
+                { name: "Community Hall", key: "community_hall_available" as const, icon: "🏛️" },
+                { name: "Ramadan Iftar", key: "ramadan_iftar_available" as const, icon: "🌙" },
+                { name: "Eid Prayer Ground", key: "eid_prayer_ground_available" as const, icon: "🌟" },
+                { name: "Zakat Collection", key: "zakat_collection_available" as const, icon: "🤲" },
+                { name: "Funeral Prayer Facility", key: "funeral_prayer_facility_available" as const, icon: "🕊️" },
+              ];
+              const enabledFacilities = allFacilities.filter(f => mosque[f.key]);
+              if (enabledFacilities.length === 0) return null;
+              return (
+                <section className="rounded-2xl border border-slate-900/10 bg-white p-6 shadow-sm">
+                  <h2 className="text-lg font-bold text-slate-950">Facilities &amp; Accommodation</h2>
+                  <p className="mt-1 text-xs text-slate-500">Facilities available at this mosque.</p>
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                    {enabledFacilities.map((f) => (
+                      <div key={f.key} className="flex items-center gap-2.5 rounded-xl border border-slate-100 bg-slate-50/50 p-3 text-sm">
+                        <span className="text-lg">{f.icon}</span>
+                        <span className="font-semibold text-slate-800 leading-tight">{f.name}</span>
+                        <span className="ml-auto inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                          Available
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </section>
+                </section>
+              );
+            })()}
           </div>
 
           {/* Sidebar Columns */}
@@ -1011,12 +1043,32 @@ export default function MosqueDetailPage() {
             </section>
 
             {/* 6. About Mosque Panel */}
-            <section className="rounded-2xl border border-slate-900/10 bg-white p-5 shadow-sm">
-              <h2 className="text-md font-bold text-slate-950">About Mosque</h2>
-              <p className="mt-2 text-xs text-slate-700 leading-relaxed font-normal whitespace-pre-line">
-                {mosque.description || "No description has been posted by the administrator yet."}
-              </p>
-            </section>
+            {mosque.description && (
+              <section className="rounded-2xl border border-slate-900/10 bg-white p-5 shadow-sm">
+                <h2 className="text-md font-bold text-slate-950">About Mosque</h2>
+                <p className="mt-2 text-xs text-slate-700 leading-relaxed font-normal whitespace-pre-line">
+                  {mosque.description}
+                </p>
+              </section>
+            )}
+
+            {/* 7. Imam Information — only shown when set */}
+            {mosque.imam_name && (
+              <section className="rounded-2xl border border-slate-900/10 bg-white p-5 shadow-sm">
+                <h2 className="text-md font-bold text-slate-950">Imam</h2>
+                <div className="mt-3 space-y-1.5">
+                  <p className="text-sm font-semibold text-slate-800">{mosque.imam_name}</p>
+                  {mosque.imam_contact_number && (
+                    <a
+                      href={`tel:${mosque.imam_contact_number}`}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-800 hover:underline"
+                    >
+                      📞 {mosque.imam_contact_number}
+                    </a>
+                  )}
+                </div>
+              </section>
+            )}
           </div>
         </div>
       </div>

@@ -1,19 +1,211 @@
-# Environment files
-.env.example
+# =============================================================================
+# Mosque Finder — Root .gitignore
+# =============================================================================
 
-# Docker configurations
-#docker-compose.yml
-#docker-compose.prod.yml
+# =============================================================================
+# SECRETS & ENVIRONMENT  (never commit credentials)
+# =============================================================================
+.env
+.env.*
+!.env.example
 
-# Project documentation and review reports
+
+# =============================================================================
+# PYTHON
+# =============================================================================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Distribution / packaging
+*.egg
+*.egg-info/
+dist/
+build/
+wheels/
+sdist/
+MANIFEST
+
+# Unit test / coverage
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+ENV/
+
+# SQLite dev databases
+*.sqlite3
+*.db
+
+# Django
+*.log
+local_settings.py
+staticfiles/
+media/
+
+# Jupyter
+.ipynb_checkpoints
+*.ipynb
+
+
+# =============================================================================
+# NODE / NEXT.JS / FRONTEND
+# =============================================================================
+node_modules/
+.next/
+out/
+dist/
+coverage/
+*.tsbuildinfo
+.turbo/
+.vercel/
+
+# Cypress
+cypress/screenshots/
+cypress/videos/
+
+
+# =============================================================================
+# IDE & EDITOR
+# =============================================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+*~
+.editorconfig
+
+
+# =============================================================================
+# OPERATING SYSTEM
+# =============================================================================
+Thumbs.db
+Thumbs.db:encryptable
+Desktop.ini
+ehthumbs.db
+ehthumbs_vista.db
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.Spotlight-V100
+.Trashes
+
+# Linux
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+
+# =============================================================================
+# AI TOOLS — local IDE orchestration, not application code
+# =============================================================================
+# Claude Code — session caches, strategies, and instructions
+CLAUDE.md
+.claude/
+.claude-strategies.json
+
+# Antigravity / Gemini agent workspace rules
+.agents/
+
+# Cursor AI
+.cursor/
+
+# Vibe-check session data
+.vibecheck/
+
+# Qodo
+.qodo/
+
+# AI-generated audit, review, and orchestration markdown files
+# These were produced by AI agents during development and are not
+# required to build, run, test, or deploy the application.
 ARCHITECTURE_REVIEW_V2.md
-CODING_RULES.md
-DEVELOPMENT_ROADMAP.md
 MASTER_PROJECT_STATUS_REPORT.md
 MASTER_PROJECT_STATUS_REPORT_V2.md
 NEXT_PHASE_RECOMMENDATION.md
 PHASE7_FOUNDATION_REVIEW.md
 PRODUCTION_LAUNCH_REVIEW.md
 PROJECT_AUDIT.md
-PROJECT_VISION.md
 TECHNICAL_DEBT_REGISTER.md
+implementation_plan.md
+walkthrough.md
+task.md
+
+
+# =============================================================================
+# PERSONAL SCREENSHOTS & DEVELOPMENT IMAGES
+# =============================================================================
+Mosque Project websitte images/
+Mosques Project Related pics and docs/
+
+
+# =============================================================================
+# BUILD ARTIFACTS & TEMPORARY FILES
+# =============================================================================
+tmp/
+temp/
+*.tmp
+*.bak
+*.orig
+*.rej
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+
+# =============================================================================
+# DOCKER (keep configs, ignore local override secrets)
+# =============================================================================
+.docker/
+
+
+# =============================================================================
+# WHAT IS INTENTIONALLY KEPT
+# =============================================================================
+# Only files required to build, run, test, or deploy the application:
+#   README.md
+#   CODING_RULES.md
+#   DEVELOPMENT_ROADMAP.md
+#   ENGINEERING_WORKFLOW.md
+#   PROJECT_VISION.md
+#   docs/deployment.md
+#   docker-compose.yml
+#   docker-compose.prod.yml
+#   .env.example                   — safe template, no secrets
+#   .github/                       — CI/CD workflows
+#   backend/                       — all application source code
+#   frontend/                      — all application source code
+#   infra/                         — infrastructure configs
+#   workflows/                     — deployment workflows

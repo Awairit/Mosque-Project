@@ -38,3 +38,36 @@ class IsMosqueAdminOfObject(BasePermission):
             return obj.mosque == mosque_admin.mosque
 
         return False
+
+
+class IsCityAdmin(BasePermission):
+    """Allows access only to authenticated users who are active City Admins."""
+
+    def has_permission(self, request, view) -> bool:
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and hasattr(request.user, "city_admin")
+            and request.user.city_admin.is_active
+        )
+
+
+class IsCityAdminOfObject(BasePermission):
+    """Allows access only to the City Admin associated with the specific city object."""
+
+    def has_permission(self, request, view) -> bool:
+        return bool(request.user and request.user.is_authenticated)
+
+    def has_object_permission(self, request, view, obj) -> bool:
+        if not hasattr(request.user, "city_admin"):
+            return False
+
+        city_admin = request.user.city_admin
+        if not city_admin.is_active:
+            return False
+
+        # If the object has a city foreign key
+        if hasattr(obj, "city"):
+            return obj.city == city_admin.city
+
+        return False

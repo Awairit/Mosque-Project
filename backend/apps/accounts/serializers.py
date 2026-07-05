@@ -13,7 +13,11 @@ class LoginSerializer(serializers.Serializer):
         value = value.strip()
         if not value:
             raise serializers.ValidationError("Mobile number is required.")
-        return value
+        from apps.common.utils.strings import normalize_phone_number
+        try:
+            return normalize_phone_number(value)
+        except ValueError:
+            return value
 
     def validate_password(self, value: str) -> str:
         if not value:
