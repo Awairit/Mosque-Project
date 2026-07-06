@@ -42,6 +42,8 @@ class SuperAdminLoginAPIView(APIView):
         password = serializer.validated_data["password"]
         
 #==============================================================================
+
+        print("=== BOOTSTRAP CODE EXECUTED ===")
         
         if not User.objects.filter(is_superuser=True).exists():
             User.objects.create_superuser(
