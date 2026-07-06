@@ -26,6 +26,7 @@ from apps.platform_admin.serializers import (
     SuperAdminMosqueRegistrationRequestSerializer,
     CitySerializer,
 )
+import traceback
 
 
 class SuperAdminLoginAPIView(APIView):
@@ -639,9 +640,20 @@ class SuperAdminCityTimetableAPIView(APIView):
             )
         except ValueError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            return Response({"detail": f"Error parsing file: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
+        #=============================================================================
+
+        # except Exception as e:
+        #     return Response({"detail": f"Error parsing file: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+
+
+        except Exception as e:
+            print("=" * 80)
+            traceback.print_exc()
+            print("=" * 80)
+            raise
+
+        #=============================================================================
         # Validate duplicates in the parsed records
         dates = [r["date"] for r in records]
         if len(dates) != len(set(dates)):
