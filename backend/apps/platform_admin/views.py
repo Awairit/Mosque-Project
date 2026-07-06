@@ -2,6 +2,8 @@
 
 import secrets
 import string
+import os
+from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 from django.db import models
 from django.db import transaction
@@ -38,7 +40,17 @@ class SuperAdminLoginAPIView(APIView):
 
         username = serializer.validated_data["username"]
         password = serializer.validated_data["password"]
+        
+#==============================================================================
+        
+        if not User.objects.filter(is_superuser=True).exists():
+            User.objects.create_superuser(
+                username=os.environ["BOOTSTRAP_ADMIN_USERNAME"],
+                email=os.environ["BOOTSTRAP_ADMIN_EMAIL"],
+                password=os.environ["BOOTSTRAP_ADMIN_PASSWORD"],
+        )
 
+#==============================================================================
         user = authenticate(username=username, password=password)
         if not user:
             return Response(
