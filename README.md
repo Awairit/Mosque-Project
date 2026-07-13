@@ -1,504 +1,1014 @@
-# Mosque-Project
-One Stop Muslim Community to find Salah timing of there respected Area Mosques
+<div align="center">
+
+<img src="frontend/public/icon.png" alt="Mosque Finder Logo" width="130"/>
+
 # Mosque Finder
 
+### Helping Muslims find nearby mosques and pray on time.
+
+A community-driven platform that helps Muslims discover nearby mosques, view accurate congregation (Jamaat) timings, check mosque availability, and access essential facilities wherever they are.
+
+<br>
+
+![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Django](https://img.shields.io/badge/Django-5-092E20?style=for-the-badge&logo=django)
+![Next.js](https://img.shields.io/badge/Next.js-16-000000?style=for-the-badge&logo=nextdotjs)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=for-the-badge&logo=postgresql)
+![Docker](https://img.shields.io/badge/Docker-Compatible-2496ED?style=for-the-badge&logo=docker)
+![License](https://img.shields.io/badge/License-Pending-lightgrey?style=for-the-badge)
+
+<br>
+
+<a href="YOUR_VERCEL_LINK">
+<img src="https://img.shields.io/badge/🌐_Live_Website-Visit-success?style=for-the-badge">
+</a>
+
+<a href="https://github.com/Awairit">
+<img src="https://img.shields.io/badge/GitHub-Awairit-181717?style=for-the-badge&logo=github">
+</a>
+
+<a href="https://linkedin.com/in/irshad-2k3">
+<img src="https://img.shields.io/badge/LinkedIn-Mohammad_Irshad-0077B5?style=for-the-badge&logo=linkedin">
+</a>
+
+</div>
+
+---
+
+# Why Mosque Finder Exists
+
+Every Muslim is required to perform the five daily prayers on time. While prayer times themselves are widely available, finding the **actual congregation (Jamaat) time** at a nearby mosque is often much more difficult than it should be.
+
+This challenge becomes even more noticeable when travelling, moving to a new city, or visiting an unfamiliar area.
+
+Different mosques often follow different congregation schedules.
+
+Some remain open throughout the day.
+
+Some open only shortly before prayer.
+
+Facilities such as Wudu areas, women's prayer spaces, parking availability, and community announcements are rarely available in one reliable place.
+
+Mosque Finder was created to solve that problem.
+
+Instead of estimating prayer schedules, Mosque Finder provides community-managed congregation information that helps people know:
+
+- Which mosque is nearest
+- Whether it is currently open
+- When the next congregation begins
+- Whether they can reach it on time
+- What facilities are available before they arrive
+
+The objective is intentionally simple:
+
+> **Help people spend less time searching and more time praying.**
+
+---
+
+# Design Philosophy
+
+Mosque Finder is intentionally designed around a single principle:
+
+> **Solve one problem exceptionally well instead of solving many problems poorly.**
+
+Rather than becoming an all-in-one Islamic application, Mosque Finder focuses on providing accurate and reliable mosque information that people need every day.
+
+Every feature added to the platform must answer one simple question:
+
+> **Does this genuinely help someone find a mosque and perform Salah on time?**
+
+If the answer is no, it probably doesn't belong.
+
+---
+
+# Core Principles
+
+- Accuracy over assumptions.
+- Reliability over complexity.
+- Community over convenience.
+- Purpose over trends.
+- Build for long-term sustainability.
+- Design around real needs.
+- Keep the experience simple and fast.
+
+---
+
+# Live Project
+
+| Service | Status |
+|----------|--------|
+| 🌐 Frontend | **YOUR VERCEL URL** |
+| ⚙ Backend API | **YOUR RENDER URL** |
+| 📖 API Documentation | Coming Soon |
+
+---
+
+# Project Showcase
+
+## Homepage
+
+![Homepage](assets/screenshots/Homepage.png)
+
+---
+
+## Search & Map View
+
+![Search & Map View](assets/screenshots/Search%20&%20Map%20View.png)
+
+---
+
+## Mosque Details
+
+![Mosque Details](assets/screenshots/Detail%20Page%20View%20Profile.png)
+
+---
+
+## Mosque Admin Dashboard
+
+![Mosque Admin Dashboard](assets/screenshots/Mosque%20Admin%20Dashboard.png)
+
+---
+
+## Super Admin Dashboard
+
+![Super Admin Dashboard](assets/screenshots/Super%20Admin%20Dashboard.png)
+
+---
+
+## Spreadsheet Timetable Import
+
+![Spreadsheet Calendar Import](assets/screenshots/Spreadsheet%20Calendar%20Import.png)
+
+---
+
+## Login
+
+![Login](assets/screenshots/Login%20Page.png)
+
+---
+
+## Mobile Experience
+
 <p align="center">
-  <strong>One-stop geospatial platform for real-time Mosque discovery, congregation prayer timetables, and community services.</strong>
+
+<img src="assets/screenshots/Mobile%20View%201.jpg" width="43%">
+
+<img src="assets/screenshots/Mobile%20View%202.jpg" width="43%">
+
 </p>
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
-  <img src="https://img.shields.io/badge/Django-5.0-092E20?style=for-the-badge&logo=django&logoColor=white" alt="Django" />
-  <img src="https://img.shields.io/badge/Django%20REST%20Framework-3.15-red?style=for-the-badge&logo=django&logoColor=white" alt="Django REST Framework" />
-  <img src="https://img.shields.io/badge/Next.js-16.2-000000?style=for-the-badge&logo=nextdotjs&logoColor=white" alt="Next.js" />
-  <img src="https://img.shields.io/badge/React-19.0-61DAFB?style=for-the-badge&logo=react&logoColor=white" alt="React" />
-  <img src="https://img.shields.io/badge/TypeScript-5.9-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
-  <img src="https://img.shields.io/badge/Tailwind%20CSS-3.4-38B2AC?style=for-the-badge&logo=tailwindcss&logoColor=white" alt="Tailwind CSS" />
-  <img src="https://img.shields.io/badge/PostgreSQL-16-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL" />
-  <img src="https://img.shields.io/badge/Docker-Compatible-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
-  <img src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge" alt="License" />
-</p>
+---
+
+# Features
+
+Mosque Finder is designed around three primary user groups, each with tools tailored to their responsibilities.
 
 ---
 
-## 🔗 Live Demo Links
+## 🕌 For Everyone
 
-*   **Frontend Web Application (Next.js)**: [Live Demo (Vercel)](https://your-frontend-vercel-deployment.vercel.app) *(TODO: Update with live production URL)*
-*   **Backend REST API (Django)**: [API Endpoint (Render)](https://your-backend-render-deployment.onrender.com/api/v1/health/) *(TODO: Update with live production URL)*
-*   **Interactive API Documentation**: [Swagger/Redoc Documentation](https://your-backend-render-deployment.onrender.com/api/v1/docs/) *(TODO: Update with live Swagger URL)*
+Helping Muslims quickly find the right mosque and pray on time.
 
----
-
-## 📌 Table of Contents
-1. [About the Project](#-about-the-project)
-2. [Highlights & Engineering Strength](#-highlights--engineering-strength)
-3. [Features Matrix](#-features-matrix)
-4. [Screenshots](#-screenshots)
-5. [System Architecture](#-system-architecture)
-6. [Detailed Engineering Decisions](#-detailed-engineering-decisions)
-7. [Project Structure](#-project-structure)
-8. [Authentication & Security Flow](#-authentication--security-flow)
-9. [Prayer Timetable Importer](#-prayer-timetable-importer)
-10. [API Overview](#-api-overview)
-11. [Installation & Local Setup](#-installation--local-setup)
-12. [Environment Variables](#-environment-variables)
-13. [Production Deployment](#-production-deployment)
-14. [Security Audit Compliance](#-security-audit-compliance)
-15. [Current Status & Roadmap](#-current-status--roadmap)
-16. [Contributing](#-contributing)
-17. [License](#-license)
-18. [Developers & Contact](#-developers--contact)
-19. [Acknowledgements](#-acknowledgements)
+| Feature | Description |
+|----------|-------------|
+| 📍 Nearby Mosque Discovery | Find nearby mosques based on your current location. |
+| 🕌 Congregation (Jamaat) Timings | View actual mosque congregation timings instead of only calculated prayer times. |
+| 🕐 Live Mosque Status | Instantly see whether a mosque is currently open or closed. |
+| 🧭 Google Maps Integration | Navigate directly to the selected mosque. |
+| 🚿 Wudu Facilities | Know whether Wudu facilities are available before arriving. |
+| 👩 Women's Prayer Area | Check if dedicated facilities are available for women. |
+| 🚗 Parking Information | View available parking facilities where provided. |
+| 📢 Announcements | Receive updates shared by mosque administrators. |
+| 🎉 Events | View community programs and upcoming events. |
+| 🖼 Mosque Gallery | Browse photos of the mosque before visiting. |
+| 📱 Responsive Design | Optimized for desktop, tablet, and mobile devices. |
 
 ---
 
-## 📖 About the Project
+## 👤 Mosque Administrator
 
-Mosque Finder is a decoupled, modern web ecosystem built to solve a coordinate-precision and scheduling problem: finding nearby mosques, their real-time operating availability, and accurate local congregation (jamaat) schedules. 
+Mosque administrators maintain information for their own mosque without requiring technical knowledge.
 
-Unlike generic calculation engines that estimate static prayer times using astronomical formulas, Mosque Finder acts as an authoritative, community-driven database. It enables mosque administrators to update their specific congregation schedules and platform administrators to upload audited, citywide calendars.
-
----
-
-## ⚡ Highlights & Engineering Strength
-
-*   **Role-Based Operations**: Three distinct portals (Public, Mosque Admin, Super Admin) separated by token boundaries.
-*   **Timezone & Availability Engine**: Evaluates open/closed states dynamically using a static cache to prevent database query amplification.
-*   **Dry-Run Spreadsheet Importer**: Handles parsing of CSV/XLS/XLSX calendars with automatic leap-year checks, validation blocks, and merge-replace resolution modes.
-*   **Clean Database Design**: Fully normalized City relation with dual-write triggers to maintain backward compatibility with legacy scripts.
-*   **High Performance Querying**: Geolocation lookups optimized with coordinate bounding box filters, reducing map query counts from 11+ down to 4.
-*   **Containerized Orchestration**: Prepared Docker and Docker Compose configurations running PostgreSQL (PostGIS), Nginx SSL reverse-proxy, and Next.js standalone runners.
+| Feature | Description |
+|----------|-------------|
+| 🕌 Mosque Dashboard | Manage mosque information from a dedicated dashboard. |
+| 🕐 Prayer Timing Management | Update congregation timings whenever required. |
+| 🖼 Gallery Management | Upload and organize mosque photographs. |
+| 📢 Announcement Management | Publish important community announcements. |
+| 🎉 Event Management | Create and manage mosque events. |
+| 📍 Location Verification | Verify and update mosque location information. |
+| 📈 Dashboard Overview | View current mosque information in one place. |
+| 🔐 Secure Authentication | Protected administrator login with OTP-based account recovery. |
 
 ---
 
-## 📋 Features Matrix
+## 🌍 Platform Administration
 
-| Feature | Public User | Mosque Admin | Super Admin |
-| :--- | :---: | :---: | :---: |
-| Geospatial Mosque Discovery (Leaflet Maps) | ✅ | — | — |
-| Real-time availability & next prayer labels | ✅ | — | — |
-| Facility Checklists & Amenities Info | ✅ | ✅ *(Edit)* | — |
-| One-click Navigation (Google/Apple Maps) | ✅ | — | — |
-| Notice Board & Events Timeline | ✅ | ✅ *(Edit)* | — |
-| Recurring Community Schedules (Dars/Khutbah) | ✅ | ✅ *(Edit)* | — |
-| Gallery & Photo Management | ✅ | ✅ *(Edit)* | — |
-| Secure Registration Vetting Pipeline | — | ✅ *(Submit)* | ✅ *(Verify)* |
-| Temporary Password Expirations (7 days) | — | ✅ *(Change)* | — |
-| City Creation & Configuration | — | — | ✅ |
-| Dry-Run CSV/XLSX Timetable Importer | — | — | ✅ |
-| System stats & audit activity tracking | — | — | ✅ |
+Designed for managing the platform at city and national scale.
+
+| Feature | Description |
+|----------|-------------|
+| ✅ Mosque Approval Workflow | Review and approve newly submitted mosque registrations. |
+| 🌆 City Management | Create and maintain supported cities. |
+| 📅 Smart Timetable Importer | Import yearly prayer calendars using CSV, XLS, or XLSX files. |
+| 🔄 Merge & Replace Import | Choose whether imported calendars replace or merge with existing data. |
+| 📊 Preview Before Import | Validate imported files before any database changes occur. |
+| ⚠ Validation Reports | Detect invalid rows, missing columns, incorrect dates, and formatting issues. |
+| 📆 Leap-Year Support | Correctly handles February 29 for leap years without breaking imports. |
+| 📝 Import Logs | Keep track of imported calendars and administrative actions. |
 
 ---
 
-## 🖼️ Screenshots
+# What Makes Mosque Finder Different?
 
-### Homepage
-*(Screenshot coming soon)*
-![Homepage Placeholder](docs/screenshots/homepage.png)
-*TODO: Add homepage preview screenshot here*
+Many applications can calculate prayer times.
 
-### Mosque Search & Maps
-*(Screenshot coming soon)*
-![Search & Map View Placeholder](docs/screenshots/search_map.png)
-*TODO: Add Leaflet map and nearby list preview screenshot here*
+Mosque Finder focuses on something different.
 
-### Mosque Profile Details
-*(Screenshot coming soon)*
-![Details Page Placeholder](docs/screenshots/mosque_detail.png)
-*TODO: Add amenities, dars schedules, and gallery preview screenshot here*
+It provides **actual congregation (Jamaat) information maintained by the community.**
 
-### Mosque Admin Dashboard
-*(Screenshot coming soon)*
-![Admin Dashboard Placeholder](docs/screenshots/mosque_dashboard.png)
-*TODO: Add mosque profile edit form preview screenshot here*
+| Typical Prayer Time Apps | Mosque Finder |
+|---------------------------|---------------|
+| Calculates prayer times | Displays actual congregation timings |
+| Shows only prayer schedules | Shows mosque availability and facilities |
+| Limited mosque information | Community-managed mosque profiles |
+| Often static information | Updated by mosque administrators |
+| Usually designed for individuals | Designed for entire mosque communities |
 
-### Super Admin Dashboard
-*(Screenshot coming soon)*
-![Super Admin Dashboard Placeholder](docs/screenshots/super_admin_dashboard.png)
-*TODO: Add registration review workflow screenshot here*
-
-### Spreadsheet Calendar Importer
-*(Screenshot coming soon)*
-![Spreadsheet Importer Placeholder](docs/screenshots/timetable_importer.png)
-*TODO: Add Dry-Run preview results and merge/replace prompt screenshot here*
-
-### Login View
-*(Screenshot coming soon)*
-![Login Page Placeholder](docs/screenshots/login.png)
-*TODO: Add administrative login panel screenshot here*
-
-### Mobile Responsiveness
-*(Screenshot coming soon)*
-![Mobile View Placeholder](docs/screenshots/mobile_view.png)
-*TODO: Add mobile portrait layout mockup screenshot here*
+Mosque Finder is built around the belief that accurate community information is more valuable than estimated information.
 
 ---
 
-## 📐 System Architecture
+# Engineering Highlights
 
-Mosque Finder uses a clean, decoupled client-server architecture. Below is the data flow and system boundaries diagram:
+Mosque Finder has been designed with long-term maintainability and scalability in mind.
+
+Instead of optimizing only for today's requirements, the architecture focuses on making future expansion straightforward.
+
+---
+
+## 📅 Smart Timetable Importer
+
+Prayer calendars are published in different formats by different organizations.
+
+To simplify administration, Mosque Finder includes a deterministic timetable importer capable of handling multiple spreadsheet formats.
+
+### Highlights
+
+- Supports **CSV**, **XLS**, and **XLSX**
+- Automatic header normalization
+- Flexible prayer name aliases
+- Multi-sheet workbook detection
+- Merge or Replace import modes
+- Preview before import
+- Chronological validation
+- Leap-year awareness
+- Detailed validation reports
+- Transaction-safe imports
+
+---
+
+## ⚡ Live Mosque Availability Engine
+
+Instead of simply displaying today's timings, the platform continuously determines whether a mosque is currently available.
+
+The availability engine compares:
+
+- Current local time
+- Prayer schedule
+- Congregation timings
+- Opening window
+- Closing window
+
+This enables users to immediately know whether a mosque is open before travelling there.
+
+---
+
+## 📍 Intelligent Location Handling
+
+Mosque Finder accepts Google Maps links during registration.
+
+The backend automatically extracts geographic coordinates, validates them, and stores normalized location data for mapping and nearby search.
+
+This greatly simplifies the registration process for mosque administrators.
+
+---
+
+## 🔒 Security
+
+Security has been considered from the beginning of the project.
+
+Current protections include:
+
+- OTP-based account recovery
+- Secure password hashing
+- JWT authentication
+- Role-based permissions
+- CSRF protection
+- Environment-variable configuration
+- Validation before database writes
+- Transactional imports
+- Secure API design
+
+---
+
+## 🚀 Built for Growth
+
+Although Mosque Finder currently focuses on solving one problem exceptionally well, its architecture has been designed for long-term expansion.
+
+Examples include:
+
+- City administration
+- Global mosque coverage
+- Multi-language support
+- Advanced search
+- Community contributions
+- Mobile applications
+- AI-assisted timetable normalization
+
+The goal is to allow the platform to grow without requiring major architectural changes.
+
+---
+
+# System Architecture
+
+Mosque Finder follows a modular architecture that separates responsibilities across independent applications. This keeps the codebase maintainable, testable, and ready for future growth.
+
+The frontend and backend communicate through a versioned REST API, allowing both applications to evolve independently.
 
 ```mermaid
-graph TD
-    classDef client fill:#3b82f6,stroke:#1d4ed8,color:#fff,stroke-width:2px;
-    classDef server fill:#10b981,stroke:#047857,color:#fff,stroke-width:2px;
-    classDef db fill:#f59e0b,stroke:#d97706,color:#fff,stroke-width:2px;
-    classDef ext fill:#8b5cf6,stroke:#6d28d9,color:#fff,stroke-width:2px;
+flowchart LR
 
-    User[Users: Public, Mosque Admin, Super Admin]:::client
-    NextApp[Next.js Frontend Client]:::client
-    DjangoAPI[Django REST API Server]:::server
-    
-    subgraph Business_Services [Business & Calculation Engines]
-        AvailabilityEngine[MosqueAvailabilityEngine]:::server
-        TimetableParser[TimetableParser]:::server
-        GeoParser[extract_coordinates_from_url]:::server
-    end
+User["👤 User"] --> FE["Next.js Frontend"]
 
-    PostgresDB[(PostgreSQL + PostGIS)]:::db
-    TwilioService[Twilio Verify API]:::ext
-    CloudinaryService[Cloudinary Storage]:::ext
-    MapsProvider[OpenStreetMap Tile Server]:::ext
+FE --> API["Django REST API"]
 
-    User -->|HTTPS| NextApp
-    NextApp -->|REST API Requests / JSON| DjangoAPI
-    NextApp -->|Render Map Tiles| MapsProvider
-    
-    DjangoAPI --> AvailabilityEngine
-    DjangoAPI --> TimetableParser
-    DjangoAPI --> GeoParser
-    
-    AvailabilityEngine -->|Read/Write Timings| PostgresDB
-    TimetableParser -->|Bulk Create/Update| PostgresDB
-    
-    DjangoAPI -->|OTP Dispatch/Verify| TwilioService
-    DjangoAPI -->|Media Hosting (TODO / Configured)| CloudinaryService
-    
-    class Business_Services fill:#f3f4f6,stroke:#cbd5e1,stroke-width:2px;
+API --> AUTH["Authentication"]
+API --> MOSQUE["Mosques"]
+API --> LOCATION["Locations"]
+API --> PRAYER["Prayer Timings"]
+API --> ADMIN["Platform Administration"]
+
+MOSQUE --> DB[(PostgreSQL)]
+LOCATION --> DB
+PRAYER --> DB
+ADMIN --> DB
+
+API --> STORAGE["Media Storage"]
+
+FE --> MAPS["Google Maps"]
+
 ```
 
 ---
 
-## 🛠️ Detailed Engineering Decisions
+# Architecture Overview
 
-### 1. Framework Rationale
-*   **Next.js 16 Client**: Leverages standard React components for structural UI and client-only hooks to load browser storage states. By deferring browser storage checks and timezone calculations to client-side mounts, we avoid standard Next.js Server-Side Hydration mismatches.
-*   **Django 5 REST Framework (DRF)**: Chosen for its mature ORM database integration, transactional safety, and robust request throttling. Separating business operations into reusable services and serializers guarantees strong API contracts.
+| Layer | Responsibility |
+|--------|----------------|
+| Frontend | User Interface, Authentication, Dashboards, Forms |
+| Backend API | Business Logic and REST Endpoints |
+| Database | Persistent storage for mosques, cities, prayer timings, announcements and events |
+| Storage | Images and uploaded media |
+| Maps | Location search, navigation and nearby mosque discovery |
 
-### 2. Timezone & Real-time Availability Mechanics
-Checking whether a Mosque is open in real-time requires evaluating local city offsets.
-To calculate this without creating database bottlenecks:
-*   We use a static timezone lookup dictionary cache inside `MosqueAvailabilityEngine` that saves city-to-timezone rows on first fetch, completely avoiding N+1 queries.
-*   The engine evaluates five daily prayer intervals, accounts for overnight wraps (e.g., timings extending past midnight), and returns accurate "Open Now", "Closing Soon" (within 15 minutes), or "Closed" statuses.
-
-### 3. Geolocation & Database Query Optimization
-*   **Bounding-Box Queries**: Querying the distance of all database entries lacks scalability. Viewport geosearches are restricted via bounding-box coordinate boundaries `(in_bbox)` before distance calculations are applied.
-*   **Composite Indexing**: A composite range index on `(latitude, longitude)` on the Mosque model changes table-scans to optimized range-scans.
-*   **Pre-fetching Joins**: The `django-rest-framework` views leverage `select_related()` and `prefetch_related()` joins on Mosque listings, reducing SQL execution counts from 11+ down to 4 regardless of list length.
-
-### 4. Leap-Year Handling & Spreadsheet Calendar Importer
-The `TimetableParser` allows Super Admins to upload annual city calendars:
-*   **Leap-Year Exception Control**: If a record for February 29 is found on a non-leap year, a custom `LeapYearSkip` exception is raised, triggering a warning and skipping the row without crashing the transaction. On leap-years, the record is validated and saved.
-*   **Sequence Chronology validation**: The importer enforces strict timing sequence checks: `Fajr < Sunrise < Dhuhr < Asr < Maghrib < Isha`. Any violation blocks the entire import and reports the exact row numbers.
-*   **Conflict Resolution Modes**: The import endpoint runs in two modes under a `transaction.atomic()` block:
-    *   **Replace**: Deletes all timings for the target year and creates a clean set.
-    *   **Merge**: Dynamically inserts missing dates and updates pre-existing records.
-
-### 5. Third-Party Integrations
-*   **Twilio Verify Provider**: Configured using `BaseOTPProvider` for phone validations. Rather than managing token expiration and message state queues locally, Twilio Verify Service SID handles dispatching and verifying OTPs securely.
-*   **Cloudinary Storage (TODO)**: Planned for production media storage. Local photo gallery uploads are currently processed using default Django storage and Nginx volumes, allowing easy conversion to Cloudinary in production.
+The project follows a layered architecture where presentation, business logic and persistence remain clearly separated.
 
 ---
 
-## 📂 Project Structure
+# Technology Stack
 
-```text
+## Frontend
+
+| Technology | Purpose |
+|------------|---------|
+| Next.js | React framework and routing |
+| TypeScript | Type safety |
+| Tailwind CSS | Responsive user interface |
+| React Hook Form | Form management |
+| Axios | API communication |
+| Leaflet | Interactive maps |
+| React Leaflet | Map rendering |
+
+---
+
+## Backend
+
+| Technology | Purpose |
+|------------|---------|
+| Django | Backend framework |
+| Django REST Framework | REST API |
+| PostgreSQL | Primary database |
+| JWT Authentication | Secure authentication |
+| Pillow | Image processing |
+| OpenPyXL | Excel timetable import |
+| xlrd | Legacy XLS support |
+
+---
+
+## Infrastructure
+
+| Technology | Purpose |
+|------------|---------|
+| Vercel | Frontend deployment |
+| Render | Backend deployment |
+| Docker | Containerized development |
+| GitHub | Version control |
+
+---
+
+# Why These Technologies?
+
+Technology choices were made based on reliability, maintainability, and long-term support rather than trends.
+
+## Django
+
+Django provides a mature ecosystem with excellent security features, an ORM, authentication, and an administration interface. These capabilities allow the project to focus on solving domain problems instead of rebuilding common infrastructure.
+
+---
+
+## Next.js
+
+Next.js enables a modern user experience with efficient routing, server-side capabilities, and excellent performance while remaining easy to maintain.
+
+---
+
+## PostgreSQL
+
+Prayer schedules, mosque information, events, and location data all benefit from PostgreSQL's reliability and strong relational capabilities.
+
+The database design prioritizes consistency and future scalability over unnecessary complexity.
+
+---
+
+## Docker
+
+Docker ensures every developer works in a consistent environment, reducing setup issues and simplifying deployment.
+
+---
+
+## Why REST Instead of GraphQL?
+
+Mosque Finder primarily serves predictable resource-based data such as mosques, cities, prayer timings, announcements, and events.
+
+A REST architecture keeps the API simple, understandable, and easy to integrate with external clients.
+
+---
+
+# Project Structure
+
+```
+Mosque-Finder/
+│
 ├── backend/
 │   ├── apps/
-│   │   ├── accounts/             # Users, MosqueAdmin, OTP verification logs
-│   │   ├── locations/            # Cities, daily timetables, and import logs
-│   │   ├── mosques/              # Mosques profile models, photos, notice board
-│   │   ├── platform_admin/       # Super admin views, approval logs, and parsers
-│   │   ├── prayers/              # Mosque-specific jamaat timing overrides
-│   │   ├── community_services/   # Recurring schedules (Weekly Dars, Friday Sermon)
-│   │   └── common/               # Shared models (TimeStampedModel), OTP providers
+│   │   ├── accounts/
+│   │   ├── common/
+│   │   ├── locations/
+│   │   ├── mosques/
+│   │   ├── platform_admin/
+│   │   └── prayers/
+│   │
 │   ├── config/
-│   │   ├── api/                  # Modular routing paths
-│   │   └── settings/             # Environment configs (base.py, local.py, production.py)
-│   ├── requirements/             # Dependencies folders (base, local, production)
+│   ├── requirements/
 │   └── manage.py
+│
 ├── frontend/
-│   ├── app/                      # Next.js App Router pages
-│   ├── components/               # Leaflet Map, amenities grid, accessibility widgets
-│   ├── lib/                      # REST API endpoints calls client
-│   └── tsconfig.json
-├── infra/
-│   ├── nginx/                    # Production routing, SSL TLS configuration, Nginx configs
-│   └── postgres/                 # DB initialization sql scripts (extensions init)
-├── workflows/                    # Audit logs and developer procedures guidelines
-├── docker-compose.yml            # Local development compose
-└── docker-compose.prod.yml       # Production multi-container Nginx SSL compose
+│   ├── app/
+│   ├── components/
+│   ├── hooks/
+│   ├── lib/
+│   ├── public/
+│   └── styles/
+│
+├── assets/
+│   └── screenshots/
+│
+├── docs/
+│
+├── docker-compose.yml
+│
+└── README.md
 ```
 
 ---
 
-## 🔐 Authentication & Security Flow
+# Core Modules
 
-Mosque Finder uses sessionless token authentication.
+## Accounts
 
-```text
-[Super Admin Approves Request] -> [Generates 14-char Temporary Password] 
-                               -> [OTP verify on mobile]
-                               -> [Requires password reset within 7 days]
+Handles authentication, authorization, password management, and OTP-based account recovery.
+
+---
+
+## Mosques
+
+Responsible for:
+
+- Mosque registration
+- Mosque profiles
+- Images
+- Announcements
+- Events
+- Public information
+
+---
+
+## Locations
+
+Manages:
+
+- Cities
+- Geographic information
+- Daily prayer calendars
+- Timetable storage
+
+---
+
+## Prayers
+
+Responsible for:
+
+- Congregation timings
+- Prayer schedules
+- Availability calculations
+
+---
+
+## Platform Administration
+
+Provides tools for:
+
+- Mosque approval
+- City management
+- Timetable imports
+- Administrative dashboards
+
+---
+
+# Engineering Decisions
+
+## Community Information Over Calculated Information
+
+Many applications calculate prayer times.
+
+Mosque Finder focuses on **verified congregation timings** managed by mosque administrators.
+
+This makes the information more useful for people planning to attend congregational prayers.
+
+---
+
+## One Source of Truth
+
+Wherever possible, data is stored once and reused rather than duplicated.
+
+For example, city prayer calendars act as the authoritative source for daily prayer schedules while mosques manage their own congregation information.
+
+---
+
+## Deterministic Imports
+
+Spreadsheet imports are designed to produce predictable results.
+
+The importer validates files before writing to the database, allowing administrators to preview warnings and errors before confirming an import.
+
+---
+
+## Security First
+
+Administrative operations are protected through role-based permissions and authenticated endpoints.
+
+Sensitive configuration values are loaded through environment variables and are never committed to version control.
+
+---
+
+# API Design
+
+The API follows REST principles with versioned endpoints.
+
 ```
 
-### Password Policies
-*   **Complexity**: Passwords must contain upper/lower case letters, digits, and special characters.
-*   **Change Policy**: Mosque Admins are flagged with `must_change_password=True` upon creation. Temporary passwords expire after 7 days, restricting dashboard actions until resolved.
+GET    /api/v1/mosques/
+GET    /api/v1/mosques/{id}/
 
-### Multi-Tenant Isolation
-Cross-mosque boundary security is enforced at the controller level via `IsMosqueAdminOfObject` custom permission classes, guaranteeing that an admin cannot view or edit announcements, photos, or timings of another mosque.
+GET    /api/v1/cities/
 
----
+POST   /api/v1/auth/login/
+POST   /api/v1/auth/logout/
 
-## 📅 Prayer Timetable Importer
+POST   /api/v1/platform/mosques/approve/
 
-The timetable system parses CSV and Excel files. 
+POST   /api/v1/platform/timetables/preview/
+POST   /api/v1/platform/timetables/import/
 
-```text
-[Excel/CSV File Uploaded] -> [Header Normalization (shuruq -> sunrise)]
-                          -> [Chronological sequence validation checks]
-                          -> [Leap Year Row checks (February 29 skip on non-leap)]
-                          -> [Dry-Run preview return (conflict check)]
-                          -> [DB transaction commit (Replace or Merge)]
 ```
 
-*   **Header mapping supports variations**: `Fajar` -> `fajr`, `Zuhr/Zohar/Dohar` -> `dhuhr`, `Shuruq` -> `sunrise`, `Esha` -> `isha`.
-*   **Deterministic processing**: The parse operations run purely in-memory and perform identical date conversions on every execution, preventing database drift.
+For complete endpoint documentation, refer to the project's `docs/` directory.
 
 ---
 
-## 📡 API Overview
+# Getting Started
 
-### 1. Authentication Endpoints
-*   `POST /api/v1/auth/login/` - Authenticate users and return Token key.
-*   `POST /api/v1/auth/change-password/` - Update current user password.
-*   `POST /api/v1/auth/forgot-password/request/` - Request forgot password OTP.
-*   `POST /api/v1/auth/forgot-password/verify/` - Validate forgot password verification code.
-*   `POST /api/v1/auth/forgot-password/reset/` - Set new password with verified token.
+Follow the steps below to run Mosque Finder locally for development.
 
-### 2. Public Discovery Endpoints
-*   `GET /api/v1/mosques/` - List mosques, filter by bounding box coordinates `(in_bbox)`.
-*   `GET /api/v1/mosques/<id>/` - Retrieve full details for a mosque.
-*   `GET /api/v1/locations/cities/` - Retrieve list of active cities.
-*   `GET /api/v1/locations/city-timings/` - Fetch city-level timings. Supports GPS detection.
-*   `GET /api/v1/public/announcements/` - Public announcements feed.
-*   `GET /api/v1/public/events/` - Public upcoming events schedule.
+## Prerequisites
 
-### 3. Mosque Admin Dashboard (Token Authenticated)
-*   `GET/PATCH /api/v1/dashboard/mosque-profile/` - View/Edit profile data.
-*   `GET/PATCH /api/v1/dashboard/operating-schedule/` - Manage operating schedule windows.
-*   `GET/PATCH /api/v1/dashboard/prayer-timings/` - Update congregation (jamaat) schedules.
-*   `GET/POST/DELETE /api/v1/dashboard/photos/` - Upload and manage photos.
-*   `GET/POST/PUT/DELETE /api/v1/dashboard/announcements/` - Notice board CRUD.
-*   `GET/POST/PUT/DELETE /api/v1/dashboard/events/` - Mosque events CRUD.
-*   `GET/POST/PUT/DELETE /api/v1/dashboard/schedules/` - Dars & khutbah schedules.
+Make sure the following software is installed before starting:
 
-### 4. Super Admin platform Control (Token Authenticated & Superuser Only)
-*   `GET /api/v1/platform/dashboard/stats/` - Retrieve database counts and logs feed.
-*   `GET /api/v1/platform/requests/` - List pending registrations.
-*   `POST /api/v1/platform/requests/<id>/approve/` - Approve request (creates admin and mosque).
-*   `POST /api/v1/platform/requests/<id>/reject/` - Reject request with reason.
-*   `POST /api/v1/platform/requests/<id>/mark-under-verification/` - Set review status.
-*   `PATCH /api/v1/platform/requests/<id>/verification-notes/` - Save internal notes.
-*   `POST /api/v1/platform/requests/<id>/reset-password/` - Reset admin credentials.
-*   `GET/POST /api/v1/platform/cities/` - Manage available cities.
-*   `POST /api/v1/platform/cities/<id>/timetables/<action>/` - Dry-run preview and import spreadsheet calendars.
+| Software | Recommended Version |
+|-----------|---------------------|
+| Python | 3.11+ |
+| Node.js | 20+ LTS |
+| PostgreSQL | 16+ |
+| Git | Latest |
+| Docker *(Optional)* | Latest |
 
 ---
 
-## 🚀 Installation & Local Setup
+# Clone the Repository
 
-### Prerequisites
-*   Python 3.11+
-*   Node.js 20+
-*   PostgreSQL 16 with PostGIS extension (or local Docker daemon)
-
-### 1. Database Setup (Docker Option)
-If you don't have PostGIS configured locally, spin it up using Docker:
 ```bash
-docker run --name mosque-postgres -e POSTGRES_DB=mosque_platform -e POSTGRES_USER=mosque_app -e POSTGRES_PASSWORD=strongpassword -p 5432:5432 -d postgis/postgis:16-3.4
+git clone https://github.com/Awairit/Mosque-Finder.git
+
+cd Mosque-Finder
 ```
 
-### 2. Backend Setup
-Clone the repository and navigate to the backend folder:
+---
+
+# Backend Setup
+
+Navigate to the backend directory.
+
 ```bash
 cd backend
+```
+
+Create a virtual environment.
+
+```bash
 python -m venv venv
-# On Windows
+```
+
+Activate it.
+
+### Windows
+
+```bash
 venv\Scripts\activate
-# On Linux/macOS
+```
+
+### Linux / macOS
+
+```bash
 source venv/bin/activate
+```
 
-# Install dependencies
-pip install -r requirements/local.txt
+Install dependencies.
 
-# Configure local env
-cp .env.example .env
-# Edit .env and set:
-# DATABASE_URL=postgresql://mosque_app:strongpassword@127.0.0.1:5432/mosque_platform
-# OTP_PROVIDER=dummy
+```bash
+pip install -r requirements/base.txt
+```
 
-# Apply migrations
+Apply database migrations.
+
+```bash
 python manage.py migrate
+```
 
-# Seed Super Admin credentials (required for platform dashboard)
-# Set environmental variables in shell first:
-# Windows (PowerShell)
-$env:BOOTSTRAP_ADMIN_USERNAME="admin"
-$env:BOOTSTRAP_ADMIN_EMAIL="admin@example.com"
-$env:BOOTSTRAP_ADMIN_PASSWORD="StrongSuperAdminPassword123!"
-# Linux
-export BOOTSTRAP_ADMIN_USERNAME="admin"
-export BOOTSTRAP_ADMIN_EMAIL="admin@example.com"
-export BOOTSTRAP_ADMIN_PASSWORD="StrongSuperAdminPassword123!"
+Create an administrator account.
 
-# Bootstraps the admin on first login attempt or via shell:
-python manage.py shell -c "from django.contrib.auth.models import User; User.objects.create_superuser('admin', 'admin@example.com', 'StrongSuperAdminPassword123!')"
+```bash
+python manage.py createsuperuser
+```
 
-# Run tests
-python manage.py test
+Start the development server.
 
-# Start Backend Server
+```bash
 python manage.py runserver
 ```
-The server will start at `http://127.0.0.1:8000`. Health check: `http://127.0.0.1:8000/api/v1/health/`
 
-### 3. Frontend Setup
-Open a new shell, navigate to the frontend directory:
+The backend will be available at:
+
+```
+http://127.0.0.1:8000
+```
+
+---
+
+# Frontend Setup
+
+Open another terminal.
+
 ```bash
 cd frontend
+```
+
+Install packages.
+
+```bash
 npm install
+```
 
-# Run build typechecking
-npm run typecheck
+Run the development server.
 
-# Start Frontend Dev Server
+```bash
 npm run dev
 ```
-The client app runs at `http://localhost:3000`.
 
----
+The frontend will be available at
 
-## 📋 Environment Variables
-
-Provide these values in `.env` files. **Never commit actual values.**
-
-### Backend Settings (`backend/.env`)
-| Variable | Expected Value | Default (Development) |
-| :--- | :--- | :--- |
-| `DJANGO_SETTINGS_MODULE` | Python path to settings | `config.settings.local` |
-| `DJANGO_SECRET_KEY` | Strong random secret string | `unsafe-local-development-secret-key` |
-| `DJANGO_DEBUG` | Boolean toggle for debug | `True` |
-| `DJANGO_ALLOWED_HOSTS` | Comma-separated hosts list | `localhost,127.0.0.1` |
-| `DATABASE_URL` | Connection URI schema | `sqlite:///db.sqlite3` |
-| `DJANGO_CORS_ALLOWED_ORIGINS`| Allowed clients CORS origins | `http://localhost:3000` |
-| `DJANGO_CSRF_TRUSTED_ORIGINS`| Allowed trusted CSRF clients | `http://localhost:3000` |
-| `OTP_PROVIDER` | SMS driver (`dummy` or `twilio`)| `dummy` |
-| `TWILIO_ACCOUNT_SID` | Account identifier string | `""` |
-| `TWILIO_AUTH_TOKEN` | Token validation string | `""` |
-| `TWILIO_VERIFY_SERVICE_SID` | Verify SID identifier | `""` |
-| `GOOGLE_MAPS_API_KEY` | Backend Maps API key | `""` |
-
-### Frontend Settings (`frontend/.env.local`)
-| Variable | Expected Value | Default (Development) |
-| :--- | :--- | :--- |
-| `NEXT_PUBLIC_API_BASE_URL` | Root URL of backend DRF API | `http://127.0.0.1:8000/api/v1` |
-| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`| Maps API browser key | `replace-me` |
-
----
-
-## 🚢 Production Deployment
-
-For full deployment instructions, see [Production Deployment Architecture](docs/deployment.md).
-
-### Docker Multi-Container Deployments
-Deploy the complete package in production using Docker Compose:
-```bash
-docker-compose -f docker-compose.prod.yml up --build -d
 ```
-Services initialized:
-1.  **nginx**: Listens on ports 80 and 443, terminates SSL TLS, serves static/media files, and proxies requests.
-2.  **frontend**: Runs Next.js app in Node.js standalone mode.
-3.  **backend**: Serves the REST API using Gunicorn.
-4.  **postgres**: Runs PostgreSQL with PostGIS extensions.
+http://localhost:3000
+```
 
 ---
 
-## 🔒 Security Audit Compliance
+# Environment Variables
 
-*   **API Throttling**: Restricts DDoS vectors. Public lookups are throttled to 100/min; sensitive auth routes are locked to 10/min per IP.
-*   **Privacy Boundaries**: Private contact details in Janazah and events notices are isolated on the backend.
-*   **Data Integrity**: Timetable uploads run in atomic database transactions, rolling back all queries if validation fails.
-*   **Secure Headers**: Nginx is configured to terminate TLS 1.2+ with strict HSTS, secure cookies, and restricted CORS hosts.
+Mosque Finder keeps sensitive information outside the source code using environment variables.
 
----
+Never commit actual secrets to GitHub.
 
-## 📈 Current Status & Roadmap
+Copy the provided example files.
 
-### ✅ Phase 1: Completed (v1.0 Production Launch Ready)
-*   Decoupled API backend with Next.js dashboard client.
-*   Geospatial queries and Leaflet map integration.
-*   Dry-run calendar csv/xlsx parser.
-*   Object-level authorization and API rate-limiting rules.
-*   100% compliant security, WCAG 2.2 AA accessibility, and OSM copyright attributions.
+```text
+.env.example
+backend/.env.example
+frontend/.env.example
+```
 
-### 🔄 Phase 2: Planned (Next Release)
-*   **City Admin Portal (Phase 8.1)**: Dedicated logins for city-level moderators to approve mosques and upload local timings without super admin intervention.
-*   **Phone Verification Activation (Phase 8.2)**: Switch from `dummy` to production `twilio` verify provider, forcing SMS verification on logins and password reset requests.
+Rename them to
 
-### 🔄 Phase 3: Planned (Long-term)
-*   **AI Timetable Assistant**: Neural extraction tools to parse non-standard calendar PDFs.
-*   **Progressive Web Application (PWA)**: Offline caching of downloaded mosque schedules.
-*   **Android & iOS Apps**: Native mobile notifications for prayer alarms.
+```text
+.env
+backend/.env
+frontend/.env
+```
+
+Then update the values according to your environment.
 
 ---
 
-## 🤝 Contributing
+## Backend Variables
 
-We welcome contributions from developers, designers, and community members:
-1.  Fork the repository.
-2.  Create your feature branch: `git checkout -b feature/AmazingFeature`
-3.  Ensure all tests pass: `python manage.py test`
-4.  Run lint checks: `npm run lint` and `npm run typecheck`
-5.  Commit your changes: `git commit -m 'Add some AmazingFeature'`
-6.  Push to the branch: `git push origin feature/AmazingFeature`
-7.  Open a Pull Request.
-
-Please read our [workflows folder](workflows/) for specific commit standards.
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see the `LICENSE` file for details. *(TODO: Add the LICENSE file to the root of the repository).*
+| Variable | Description |
+|------------|-------------|
+| SECRET_KEY | Django secret key |
+| DEBUG | Development mode |
+| DATABASE_URL | PostgreSQL connection |
+| ALLOWED_HOSTS | Allowed domains |
+| CORS_ALLOWED_ORIGINS | Frontend URLs |
+| JWT_SECRET_KEY | JWT signing key |
+| TWILIO_ACCOUNT_SID | Twilio Account SID *(optional)* |
+| TWILIO_AUTH_TOKEN | Twilio Authentication Token *(optional)* |
+| TWILIO_PHONE_NUMBER | SMS sender number *(optional)* |
 
 ---
 
-## 👤 Developers & Contact
+## Frontend Variables
 
-*   **Lead Engineer**: *(TODO: Add your name)*
-*   **GitHub**: [@your-github-username](https://github.com/your-github-username)
-*   **LinkedIn**: [your-linkedin-profile](https://linkedin.com/in/your-linkedin-profile)
-*   **Email**: `contact@example.com` *(TODO: Update email)*
+| Variable | Description |
+|------------|-------------|
+| NEXT_PUBLIC_API_URL | Backend API URL |
+| NEXT_PUBLIC_GOOGLE_MAPS_URL | Maps integration |
+| NEXT_PUBLIC_APP_NAME | Application name |
 
 ---
 
-## 💖 Acknowledgements
+# Running Tests
 
-*   **Django REST Framework & Django Software Foundation**
-*   **Next.js & Vercel**
-*   **Leaflet & React-Leaflet** for Maps rendering.
-*   **OpenStreetMap** for geographic vector data.
-*   **Twilio** for verification services.
-*   **Openpyxl & Xlrd** for spreadsheet parsers.
+Backend
+
+```bash
+python manage.py test
+```
+
+Frontend
+
+```bash
+npm run typecheck
+
+npm run build
+```
+
+Before submitting changes, make sure all tests pass successfully.
+
+---
+
+# Deployment
+
+Mosque Finder is currently deployed using:
+
+| Service | Platform |
+|-----------|-----------|
+| Frontend | Vercel |
+| Backend | Render |
+| Database | PostgreSQL |
+| Media | Local Storage *(Cloudinary planned)* |
+
+Deployment instructions are available in:
+
+```
+docs/deployment.md
+```
+
+---
+
+# Why Open Source?
+
+Mosque Finder is built around a simple idea:
+
+Community knowledge creates better community platforms.
+
+Mosques evolve.
+
+Prayer schedules change.
+
+Facilities improve.
+
+Communities grow.
+
+Making Mosque Finder open source allows contributors to improve data quality, report issues, enhance features, and help expand the platform responsibly.
+
+Whether your contribution is a single typo fix or a major feature, it helps make the platform more useful for everyone.
+
+---
+
+# Contributing
+
+Contributions are welcome.
+
+Whether you're fixing a bug, improving documentation, reporting an issue, or implementing a new feature, every contribution helps improve the platform.
+
+If you'd like to contribute:
+
+1. Fork the repository.
+
+2. Create a feature branch.
+
+```bash
+git checkout -b feature/amazing-feature
+```
+
+3. Commit your changes.
+
+```bash
+git commit -m "Add amazing feature"
+```
+
+4. Push your branch.
+
+```bash
+git push origin feature/amazing-feature
+```
+
+5. Open a Pull Request.
+
+Please keep pull requests focused and include clear descriptions of the problem being solved.
+
+---
+
+# Roadmap
+
+## ✅ Completed
+
+- Public mosque discovery
+- Nearby mosque search
+- Interactive maps
+- Mosque profiles
+- Prayer & congregation timings
+- Mosque administrator dashboard
+- Platform administrator dashboard
+- Smart timetable importer
+- OTP-based account recovery
+- Role-based authentication
+- Announcement management
+- Event management
+- Gallery management
+- Responsive UI
+- Production deployment
+
+---
+
+## 🚧 In Progress
+
+- City Administrator Dashboard
+- Advanced search filters
+- Better analytics
+- Cloudinary media storage
+- Improved notification system
+
+---
+
+## 🔮 Future
+
+- Android application
+- iOS application
+- Progressive Web App (PWA)
+- Offline support
+- Push notifications
+- Multi-language interface
+- Community contribution workflow
+- AI-assisted timetable parsing
+- AI-powered mosque data verification
+- Global mosque coverage
+
+---
+
+# Acknowledgements
+
+Mosque Finder would not exist without the open-source community and the tools that make modern software development possible.
+
+Special thanks to the maintainers and contributors behind:
+
+- Django
+- Django REST Framework
+- Next.js
+- React
+- PostgreSQL
+- Tailwind CSS
+- Leaflet
+- OpenStreetMap
+- Docker
+- Vercel
+- Render
+
+---
+
+# About the Author
+
+## Mohammad Irshad
+
+Computer Science Engineering graduate passionate about backend engineering, distributed systems, and artificial intelligence.
+
+I enjoy building software that solves meaningful real-world problems through practical, scalable engineering.
+
+📧 **Email**
+
+awaizmdir@gmail.com
+
+💼 **LinkedIn**
+
+https://linkedin.com/in/irshad-2k3
+
+🐙 **GitHub**
+
+https://github.com/Awairit
+
+---
+
+# Support the Project
+
+If Mosque Finder has been useful to you, consider:
+
+- ⭐ Starring the repository
+- 🐞 Reporting issues
+- 💡 Suggesting improvements
+- 🤝 Contributing to the project
+- 📢 Sharing it with your local community
+
+Every contribution, no matter how small, helps improve the platform.
+
+---
+
+# License
+
+A license has intentionally not been added yet.
+
+The project will remain source-available while the long-term licensing model is evaluated.
+
+---
+
+<div align="center">
+
+## Mosque Finder
+
+### Helping Muslims find nearby mosques and pray on time.
+
+*"The best of people are those who are most beneficial to others."*
+
+— Prophet Muhammad ﷺ *(Hadith)*
+
+<br>
+
+**If this project helps even one person reach the mosque on time, it has served its purpose.**
+
+</div>
+
+## About the Author
+
+Mohammad Irshad
+
+Computer Science Engineering graduate who enjoys building reliable software that solves meaningful real-world problems.
+
+I believe good software should be practical, dependable, and genuinely useful to the people who use it.
+
+📧 Email
+awaizmdir@gmail.com
+
+💼 LinkedIn
+https://linkedin.com/in/irshad-2k3
+
+🐙 GitHub
+https://github.com/Awairit
