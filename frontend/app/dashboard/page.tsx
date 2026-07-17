@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { ApiError, apiRequest } from "@/lib/api/client";
+import { FACILITIES_LIST } from "@/lib/constants/facilities";
+import { formatRelativeTime } from "@/lib/utils/formatters";
 
 type AdminInfo = {
   mobile: string;
@@ -1316,17 +1318,6 @@ export default function DashboardPage() {
     );
   }
 
-  const formatLastUpdated = (dateStr: string) => {
-    if (!dateStr) return "Never";
-    try {
-      return new Date(dateStr).toLocaleString(undefined, {
-        dateStyle: "medium",
-        timeStyle: "short",
-      });
-    } catch {
-      return "Unknown";
-    }
-  };
 
   const isScheduleEmpty = (s: ScheduleState) => {
     return (
@@ -1740,29 +1731,11 @@ export default function DashboardPage() {
                   )}
 
                   <div className="grid gap-3 sm:grid-cols-2">
-                    {([
-                      { key: "women_prayer_available", label: "Women's Prayer Area", desc: "Separate area for ladies to pray." },
-                      { key: "separate_women_entrance", label: "Separate Women's Entrance", desc: "Private entrance for ladies." },
-                      { key: "parking_available", label: "Parking", desc: "Dedicated parking for cars/bikes." },
-                      { key: "wudu_facility_available", label: "Wudu Facility", desc: "Ablution spaces on site." },
-                      { key: "wheelchair_accessible", label: "Wheelchair Accessibility", desc: "Ramps or elevators for wheelchair entry." },
-                      { key: "drinking_water_available", label: "Drinking Water", desc: "Clean drinking water available." },
-                      { key: "washrooms_available", label: "Washrooms", desc: "Toilet facilities on site." },
-                      { key: "library_available", label: "Library", desc: "Islamic books and resources available." },
-                      { key: "quran_classes_available", label: "Quran Classes", desc: "Regular Quran teaching sessions." },
-                      { key: "hifz_program_available", label: "Hifz Program", desc: "Quran memorisation programme." },
-                      { key: "nikah_service_available", label: "Nikah Service", desc: "Marriage ceremony services offered." },
-                      { key: "muslim_burial_ground_available", label: "Muslim Burial Ground", desc: "Islamic burial ground affiliated or nearby." },
-                      { key: "community_hall_available", label: "Community Hall", desc: "Hall available for community events." },
-                      { key: "ramadan_iftar_available", label: "Ramadan Iftar", desc: "Iftar meals provided during Ramadan." },
-                      { key: "eid_prayer_ground_available", label: "Eid Prayer Ground", desc: "Open ground for Eid prayers." },
-                      { key: "zakat_collection_available", label: "Zakat Collection", desc: "Accepts Zakat on behalf of those in need." },
-                      { key: "funeral_prayer_facility_available", label: "Funeral Prayer Facility", desc: "Janazah prayer space available." },
-                    ] as { key: keyof ProfileState; label: string; desc: string }[]).map(({ key, label, desc }) => (
+                    {FACILITIES_LIST.map(({ key, label, desc, icon }) => (
                       <label key={key} className="flex items-start gap-3 rounded-xl border border-slate-100 bg-slate-50/50 p-3.5 cursor-pointer hover:border-emerald-900/20 transition">
                         <input
                           type="checkbox"
-                          checked={!!profile[key]}
+                          checked={!!profile[key as keyof ProfileState]}
                           onChange={(e) =>
                             setProfile({ ...profile, [key]: e.target.checked })
                           }
@@ -1770,7 +1743,9 @@ export default function DashboardPage() {
                           disabled={savingProfile}
                         />
                         <span>
-                          <span className="block text-sm font-semibold text-slate-900">{label}</span>
+                          <span className="block text-sm font-semibold text-slate-900">
+                            {icon} {label}
+                          </span>
                           <span className="mt-0.5 block text-xs text-slate-500">{desc}</span>
                         </span>
                       </label>
@@ -2088,7 +2063,7 @@ export default function DashboardPage() {
                 </h2>
                 {timings.updated_at && (
                   <p className="text-xs text-slate-500">
-                    Last updated: {formatLastUpdated(timings.updated_at)}
+                    Last updated: {formatRelativeTime(timings.updated_at)}
                   </p>
                 )}
               </div>

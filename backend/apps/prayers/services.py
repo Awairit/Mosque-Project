@@ -47,27 +47,55 @@ class CongregationTimingResolver:
         if not timing:
             return None
 
+        # Build a state key representing the inputs that affect the resolution.
+        # If any of these inputs change (e.g. during a test case mutation), the cache invalidates.
+        city = timing.mosque.city_relation if timing.mosque else None
+        state_key = (
+            timing.maghrib_congregation_mode,
+            timing.maghrib_time,
+            city.maghrib_auto_congregation_enabled if city else None,
+            city.maghrib_congregation_offset if city else None,
+        )
+
+        cache_key = f"_resolved_{date_val.isoformat()}"
+        if hasattr(timing, cache_key):
+            cached_resolved, cached_state = getattr(timing, cache_key)
+            if cached_state == state_key:
+                return cached_resolved
+
         # Start with static values from the database
         resolved_maghrib = ensure_time(timing.maghrib_time)
         
         # Check if city-level auto calculation is active for this mosque
         from apps.prayers.models import PrayerTiming
         if timing.maghrib_congregation_mode == PrayerTiming.CongregationMode.CITY_OFFSET:
-            mosque = timing.mosque
-            city = mosque.city_relation if mosque else None
             if city and city.maghrib_auto_congregation_enabled:
-                from apps.locations.models import CityDailyPrayerTiming
-                daily_timing = CityDailyPrayerTiming.objects.filter(
-                    city=city,
-                    date=date_val
-                ).first()
+                # Part C: Check if we have prefetch list from today's query
+                daily_timing = None
+                today_timings = getattr(city, "today_daily_timing", None)
+                if today_timings is not None:
+                    # Due to uniqueness constraint on (city, date), we can use the first item directly
+                    # if the date matches.
+                    if len(today_timings) > 0 and today_timings[0].date == date_val:
+                        daily_timing = today_timings[0]
+                
+                # Fallback to direct DB lookup if not prefetched (details view, dashboard, tests)
+                # This guarantees immediate freshness without process restart.
+                if daily_timing is None:
+                    from apps.locations.models import CityDailyPrayerTiming
+                    daily_timing = CityDailyPrayerTiming.objects.filter(
+                        city=city,
+                        date=date_val
+                    ).first()
+
                 if daily_timing:
                     resolved_maghrib = add_minutes_to_time(
                         daily_timing.maghrib_time,
                         city.maghrib_congregation_offset
                     )
 
-        return ResolvedPrayerTiming(
+
+        resolved = ResolvedPrayerTiming(
             fajr_time=ensure_time(timing.fajr_time),
             dhuhr_time=ensure_time(timing.dhuhr_time),
             asr_time=ensure_time(timing.asr_time),
@@ -77,3 +105,8 @@ class CongregationTimingResolver:
             effective_from=timing.effective_from,
             maghrib_congregation_mode=timing.maghrib_congregation_mode,
         )
+        
+        setattr(timing, cache_key, (resolved, state_key))
+        return resolved
+
+

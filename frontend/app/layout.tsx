@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
-
 import { GlobalHeader } from "@/components/layout/GlobalHeader";
+import { env } from "@/lib/config/env";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -12,8 +12,9 @@ export const metadata: Metadata = {
   },
   description:
     "Discover nearby mosques, prayer times, jamaat timings, facilities, and directions.",
-  metadataBase: new URL("http://localhost:3000"),
+  metadataBase: new URL(env.siteUrl),
 };
+
 
 export const viewport: Viewport = {
   width: "device-width",

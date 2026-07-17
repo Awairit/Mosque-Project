@@ -26,7 +26,8 @@ from apps.mosques.serializers import (
     MosqueOperatingScheduleSerializer,
     MosqueProfileSerializer,
     MosqueRegistrationRequestSerializer,
-    MosqueSerializer,
+    MosqueListSerializer,
+    MosqueDetailSerializer,
     MosquePhotoSerializer,
     MosqueAnnouncementSerializer,
     MosqueEventSerializer,
@@ -37,9 +38,10 @@ from apps.mosques.serializers import (
 from apps.community_services.models import JanazahNotice
 
 
-def get_optimized_mosque_queryset():
+def get_optimized_mosque_queryset(prefetch_details: bool = True):
     today = timezone.localdate()
-    return Mosque.objects.filter(
+    from apps.locations.models import CityDailyPrayerTiming
+    qs = Mosque.objects.filter(
         mosque_status=Mosque.MosqueStatus.ACTIVE
     ).select_related(
         "operating_schedule",
@@ -48,48 +50,58 @@ def get_optimized_mosque_queryset():
         "city_relation",
     ).prefetch_related(
         Prefetch(
-            "photos",
-            queryset=MosquePhoto.objects.filter(is_active=True).order_by("display_order"),
-        ),
-        Prefetch(
-            "announcements",
-            queryset=MosqueAnnouncement.objects.filter(
-                is_active=True,
-                status="published",
-                start_date__lte=today,
-                end_date__gte=today,
-            ).order_by("-created_at"),
-        ),
-        Prefetch(
-            "events",
-            queryset=MosqueEvent.objects.filter(
-                is_active=True,
-                status="published",
-                event_date__gte=today,
-            ).order_by("event_date", "event_time"),
-        ),
-        Prefetch(
-            "schedules",
-            queryset=CommunitySchedule.objects.filter(
-                event_date__gte=today,
-            ).order_by("event_date", "start_time"),
-        ),
-        Prefetch(
-            "janazah_notices",
-            queryset=JanazahNotice.objects.filter(
-                status="published",
-            ).order_by("-salah_date", "-salah_time"),
-        ),
+            "city_relation__daily_prayer_timings",
+            queryset=CityDailyPrayerTiming.objects.filter(date=today),
+            to_attr="today_daily_timing"
+        )
     )
+
+    if prefetch_details:
+        qs = qs.prefetch_related(
+            Prefetch(
+                "photos",
+                queryset=MosquePhoto.objects.filter(is_active=True).order_by("display_order"),
+            ),
+            Prefetch(
+                "announcements",
+                queryset=MosqueAnnouncement.objects.filter(
+                    is_active=True,
+                    status="published",
+                    start_date__lte=today,
+                    end_date__gte=today,
+                ).order_by("-created_at"),
+            ),
+            Prefetch(
+                "events",
+                queryset=MosqueEvent.objects.filter(
+                    is_active=True,
+                    status="published",
+                    event_date__gte=today,
+                ).order_by("event_date", "event_time"),
+            ),
+            Prefetch(
+                "schedules",
+                queryset=CommunitySchedule.objects.filter(
+                    event_date__gte=today,
+                ).order_by("event_date", "start_time"),
+            ),
+            Prefetch(
+                "janazah_notices",
+                queryset=JanazahNotice.objects.filter(
+                    status="published",
+                ).order_by("-salah_date", "-salah_time"),
+            ),
+        )
+    return qs
 
 
 class MosqueListAPIView(ListAPIView):
-    serializer_class = MosqueSerializer
+    serializer_class = MosqueListSerializer
     permission_classes = [AllowAny]
     throttle_scope = "burst"
 
     def get_queryset(self):
-        queryset = get_optimized_mosque_queryset()
+        queryset = get_optimized_mosque_queryset(prefetch_details=False)
 
         # Viewport Bounding Box Filter
         bbox = self.request.query_params.get("in_bbox")
@@ -192,12 +204,12 @@ class MosqueListAPIView(ListAPIView):
 class MosqueDetailAPIView(RetrieveAPIView):
     """Fetches full configuration details for a specific active mosque."""
 
-    serializer_class = MosqueSerializer
+    serializer_class = MosqueDetailSerializer
     permission_classes = [AllowAny]
     throttle_scope = "burst"
 
     def get_queryset(self):
-        return get_optimized_mosque_queryset()
+        return get_optimized_mosque_queryset(prefetch_details=True)
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -237,7 +249,17 @@ class RegistrationOTPRequestAPIView(APIView):
             return Response({"mobile_number": ["This number is already registered."]}, status=status.HTTP_400_BAD_REQUEST)
 
         from apps.common.services.otp import OTPService
-        OTPService.generate_and_send_otp(mobile_number=normalized, purpose="registration")
+        from apps.common.services.otp_providers import OTPErrorCode
+
+        result = OTPService.generate_and_send_otp(mobile_number=normalized, purpose="registration")
+
+        if not result.success:
+            if result.code == OTPErrorCode.RATE_LIMITED:
+                return Response({"mobile_number": [result.message]}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            elif result.code in (OTPErrorCode.PROVIDER_UNAVAILABLE, OTPErrorCode.CONFIGURATION_ERROR):
+                return Response({"mobile_number": [result.message]}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            else:
+                return Response({"mobile_number": [result.message]}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response({"detail": "OTP sent to your WhatsApp number."}, status=status.HTTP_200_OK)
 
@@ -260,10 +282,17 @@ class RegistrationOTPVerifyAPIView(APIView):
             return Response({"non_field_errors": [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
 
         from apps.common.services.otp import OTPService
-        is_valid = OTPService.verify_otp(mobile_number=normalized, purpose="registration", otp=otp)
+        from apps.common.services.otp_providers import OTPErrorCode
+        
+        result = OTPService.verify_otp(mobile_number=normalized, purpose="registration", otp=otp)
 
-        if not is_valid:
-            return Response({"non_field_errors": ["Invalid or expired OTP."]}, status=status.HTTP_400_BAD_REQUEST)
+        if not result.success:
+            if result.code == OTPErrorCode.RATE_LIMITED:
+                return Response({"non_field_errors": [result.message]}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            elif result.code in (OTPErrorCode.PROVIDER_UNAVAILABLE, OTPErrorCode.CONFIGURATION_ERROR):
+                return Response({"non_field_errors": [result.message]}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            else:
+                return Response({"non_field_errors": [result.message]}, status=status.HTTP_400_BAD_REQUEST)
 
         # Issue a short-lived verification token signed with the E.164 number
         from django.core.signing import TimestampSigner

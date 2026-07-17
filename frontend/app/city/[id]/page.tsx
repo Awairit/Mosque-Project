@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { apiRequest } from "@/lib/api/client";
+import { getPreviewFacilities } from "@/lib/constants/facilities";
 
 type TimingRow = {
   date: string;
@@ -64,6 +65,23 @@ type MosquePreview = {
   mosque_name: string;
   address: string;
   mosque_status: string;
+  women_prayer_available?: boolean;
+  separate_women_entrance?: boolean;
+  parking_available?: boolean;
+  wudu_facility_available?: boolean;
+  wheelchair_accessible?: boolean;
+  drinking_water_available?: boolean;
+  washrooms_available?: boolean;
+  library_available?: boolean;
+  quran_classes_available?: boolean;
+  hifz_program_available?: boolean;
+  nikah_service_available?: boolean;
+  muslim_burial_ground_available?: boolean;
+  community_hall_available?: boolean;
+  ramadan_iftar_available?: boolean;
+  eid_prayer_ground_available?: boolean;
+  zakat_collection_available?: boolean;
+  funeral_prayer_facility_available?: boolean;
 };
 
 export default function CityPublicPage() {
@@ -231,12 +249,32 @@ export default function CityPublicPage() {
                   <Link
                     key={mosque.id}
                     href={`/mosque/${mosque.id}`}
-                    className="group border rounded-xl p-4 hover:border-emerald-600 bg-slate-50/50 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-750 transition"
+                    className="group border rounded-xl p-4 hover:border-emerald-600 bg-slate-50/50 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-750 transition flex flex-col justify-between min-h-[100px]"
                   >
-                    <h4 className="font-bold text-slate-900 group-hover:text-emerald-800 dark:text-slate-100 transition">
-                      {mosque.mosque_name}
-                    </h4>
-                    <p className="text-xs text-slate-500 mt-1">{mosque.address}</p>
+                    <div>
+                      <h4 className="font-bold text-slate-900 group-hover:text-emerald-800 dark:text-slate-100 transition">
+                        {mosque.mosque_name}
+                      </h4>
+                      <p className="text-xs text-slate-500 mt-1">{mosque.address}</p>
+                    </div>
+                    {(() => {
+                      const { preview, remainingCount } = getPreviewFacilities(mosque, 4);
+                      if (preview.length === 0) return null;
+                      return (
+                        <div className="mt-3 flex flex-wrap gap-1">
+                          {preview.map((f) => (
+                            <span key={f.key} title={f.label} className="rounded bg-white dark:bg-slate-900 border dark:border-slate-850 px-1.5 py-0.5 text-[9px] text-slate-600 dark:text-slate-400">
+                              {f.icon} {f.label}
+                            </span>
+                          ))}
+                          {remainingCount > 0 && (
+                            <span className="rounded bg-slate-100 dark:bg-slate-900 border dark:border-slate-850 px-1.5 py-0.5 text-[9px] text-slate-500 font-medium">
+                              +{remainingCount}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </Link>
                 ))}
               </div>

@@ -4,6 +4,9 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { apiRequest } from "@/lib/api/client";
+import { formatDistance, formatTimeTo12Hour, formatRelativeTime } from "@/lib/utils/formatters";
+import { getActiveFacilities } from "@/lib/constants/facilities";
+import { LABELS } from "@/lib/constants/labels";
 
 type PrayerTiming = {
   fajr_time: string;
@@ -13,6 +16,8 @@ type PrayerTiming = {
   isha_time: string;
   jumuah_time: string;
   effective_from: string;
+  /** ISO 8601 UTC timestamp: when congregation timings were last saved. */
+  updated_at?: string | null;
 };
 
 type OperatingStatus = {
@@ -137,17 +142,7 @@ type MosqueDetail = {
   janazah_notices?: JanazahNoticeState[] | null;
 };
 
-const formatTimeTo12Hour = (timeStr?: string | null) => {
-  if (!timeStr) return "Not set";
-  const parts = timeStr.split(":");
-  if (parts.length < 2) return timeStr;
-  let hour = parseInt(parts[0], 10);
-  const minute = parts[1];
-  const ampm = hour >= 12 ? "PM" : "AM";
-  hour = hour % 12;
-  hour = hour ? hour : 12;
-  return `${hour}:${minute} ${ampm}`;
-};
+
 
 const formatClassification = (typeStr?: string) => {
   if (!typeStr) return "Mosque";
@@ -202,15 +197,44 @@ export default function MosqueDetailPage() {
   const [activeTab, setActiveTab] = useState<"announcements" | "events" | "janazah">("announcements");
   const [showFuneralGuide, setShowFuneralGuide] = useState(false);
 
-  // Retrieve user location on mount if granted
+  // Retrieve user location on mount if granted, with sessionStorage cache fallback
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = sessionStorage.getItem("mosque_user_coords");
+        if (cached) {
+          const { coords: parsedCoords, timestamp } = JSON.parse(cached);
+          if (Date.now() - timestamp < 300000) {
+            setCoords(parsedCoords);
+            return; // Cache hit: do not trigger async geolocation API
+          } else {
+            sessionStorage.removeItem("mosque_user_coords");
+          }
+        }
+      } catch (err) {
+        console.error("Failed to parse cached user coordinates", err);
+      }
+    }
+
     if (typeof window !== "undefined" && "geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          setCoords({
+          const userLoc = {
             lat: position.coords.latitude,
             lon: position.coords.longitude,
-          });
+          };
+          setCoords(userLoc);
+          try {
+            sessionStorage.setItem(
+              "mosque_user_coords",
+              JSON.stringify({
+                coords: userLoc,
+                timestamp: Date.now(),
+              })
+            );
+          } catch (err) {
+            console.error("Failed to save coordinates to sessionStorage", err);
+          }
         },
         () => {},
         { timeout: 5000 }
@@ -274,13 +298,7 @@ export default function MosqueDetailPage() {
     };
   }, [id, coords]);
 
-  const formatDistance = (meters?: number | null) => {
-    if (meters === undefined || meters === null) return "";
-    if (meters < 1000) {
-      return `${Math.round(meters)} meters away`;
-    }
-    return `${(meters / 1000).toFixed(1)} km away`;
-  };
+
 
   const getStatusBadge = (status?: OperatingStatus | null) => {
     if (!status) return null;
@@ -585,6 +603,18 @@ export default function MosqueDetailPage() {
                       <span className="font-mono text-sm font-bold text-slate-950">{formatTimeTo12Hour(p.time)}</span>
                     </div>
                   ))}
+                  {mosque.prayer_timing.updated_at && (() => {
+                    const relativeTime = formatRelativeTime(mosque.prayer_timing.updated_at);
+                    return (
+                      <p
+                        className="border-t border-slate-50 pt-3 text-[11px] text-slate-500"
+                        aria-label={`${LABELS.LAST_UPDATED}: ${relativeTime}`}
+                      >
+                        <span aria-hidden="true">🕒</span>{" "}
+                        {LABELS.LAST_UPDATED}: {relativeTime}
+                      </p>
+                    );
+                  })()}
                 </div>
               ) : (
                 <div className="mt-5 rounded-xl bg-slate-50 py-8 text-center text-sm text-slate-500 font-medium">
@@ -592,6 +622,7 @@ export default function MosqueDetailPage() {
                 </div>
               )}
             </section>
+
 
             {/* Community Section (Unified Tabs: Announcements, Events, Janazah Notices) */}
             <section className="rounded-2xl border border-slate-900/10 bg-white p-6 shadow-sm space-y-5">
@@ -956,26 +987,7 @@ export default function MosqueDetailPage() {
 
             {/* 4. Facilities — conditional: only shown when at least one is enabled */}
             {(() => {
-              const allFacilities = [
-                { name: "Women's Prayer Area", key: "women_prayer_available" as const, icon: "🚺" },
-                { name: "Separate Women's Entrance", key: "separate_women_entrance" as const, icon: "🚪" },
-                { name: "Parking", key: "parking_available" as const, icon: "🚗" },
-                { name: "Wudu Facility", key: "wudu_facility_available" as const, icon: "💧" },
-                { name: "Wheelchair Accessibility", key: "wheelchair_accessible" as const, icon: "♿" },
-                { name: "Drinking Water", key: "drinking_water_available" as const, icon: "🚰" },
-                { name: "Washrooms", key: "washrooms_available" as const, icon: "🚻" },
-                { name: "Library", key: "library_available" as const, icon: "📚" },
-                { name: "Quran Classes", key: "quran_classes_available" as const, icon: "📖" },
-                { name: "Hifz Program", key: "hifz_program_available" as const, icon: "🕌" },
-                { name: "Nikah Service", key: "nikah_service_available" as const, icon: "💍" },
-                { name: "Muslim Burial Ground", key: "muslim_burial_ground_available" as const, icon: "🌿" },
-                { name: "Community Hall", key: "community_hall_available" as const, icon: "🏛️" },
-                { name: "Ramadan Iftar", key: "ramadan_iftar_available" as const, icon: "🌙" },
-                { name: "Eid Prayer Ground", key: "eid_prayer_ground_available" as const, icon: "🌟" },
-                { name: "Zakat Collection", key: "zakat_collection_available" as const, icon: "🤲" },
-                { name: "Funeral Prayer Facility", key: "funeral_prayer_facility_available" as const, icon: "🕊️" },
-              ];
-              const enabledFacilities = allFacilities.filter(f => mosque[f.key]);
+              const enabledFacilities = getActiveFacilities(mosque);
               if (enabledFacilities.length === 0) return null;
               return (
                 <section className="rounded-2xl border border-slate-900/10 bg-white p-6 shadow-sm">
@@ -985,7 +997,7 @@ export default function MosqueDetailPage() {
                     {enabledFacilities.map((f) => (
                       <div key={f.key} className="flex items-center gap-2.5 rounded-xl border border-slate-100 bg-slate-50/50 p-3 text-sm">
                         <span className="text-lg">{f.icon}</span>
-                        <span className="font-semibold text-slate-800 leading-tight">{f.name}</span>
+                        <span className="font-semibold text-slate-800 leading-tight">{f.label}</span>
                         <span className="ml-auto inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
                           Available
                         </span>

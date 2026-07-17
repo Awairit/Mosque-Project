@@ -94,15 +94,10 @@ class MosqueEventSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "created_at", "updated_at")
 
 
-class MosqueSerializer(serializers.ModelSerializer):
+class MosqueListSerializer(serializers.ModelSerializer):
     prayer_timing = serializers.SerializerMethodField()
     operating_status = serializers.SerializerMethodField()
     distance = serializers.SerializerMethodField()
-    photos = serializers.SerializerMethodField()
-    announcements = serializers.SerializerMethodField()
-    events = serializers.SerializerMethodField()
-    schedules = serializers.SerializerMethodField()
-    janazah_notices = serializers.SerializerMethodField()
     city = serializers.SerializerMethodField()
     city_id = serializers.SerializerMethodField()
 
@@ -147,11 +142,6 @@ class MosqueSerializer(serializers.ModelSerializer):
             "prayer_timing",
             "operating_status",
             "distance",
-            "photos",
-            "announcements",
-            "events",
-            "schedules",
-            "janazah_notices",
             "created_at",
             "updated_at",
         )
@@ -190,9 +180,29 @@ class MosqueSerializer(serializers.ModelSerializer):
         resolved = CongregationTimingResolver.resolve_prayer_timing(timing, date_val)
         if not resolved:
             return None
-        return ResolvedPrayerTimingSerializer(resolved).data
+
+        # Build a plain dict from the resolved dataclass, then add the ORM-level
+        # timestamp (already in memory via select_related — no extra DB query).
+        # We serialise via ResolvedPrayerTimingSerializer so field formatting
+        # (time format strings, date format, etc.) stays in one place.
+        payload = {
+            "fajr_time": resolved.fajr_time,
+            "dhuhr_time": resolved.dhuhr_time,
+            "asr_time": resolved.asr_time,
+            "maghrib_time": resolved.maghrib_time,
+            "isha_time": resolved.isha_time,
+            "jumuah_time": resolved.jumuah_time,
+            "effective_from": resolved.effective_from,
+            "maghrib_congregation_mode": resolved.maghrib_congregation_mode,
+            "updated_at": timing.updated_at if timing.updated_at else None,
+        }
+        return ResolvedPrayerTimingSerializer(payload).data
+
 
     def get_distance(self, obj) -> float | None:
+        if hasattr(obj, "distance_val") and obj.distance_val is not None:
+            return obj.distance_val
+
         user_lat = self.context.get("lat")
         user_lon = self.context.get("lon")
         if user_lat is not None and user_lon is not None and obj.latitude is not None and obj.longitude is not None:
@@ -201,6 +211,24 @@ class MosqueSerializer(serializers.ModelSerializer):
             except (ValueError, TypeError):
                 pass
         return None
+
+
+class MosqueDetailSerializer(MosqueListSerializer):
+    photos = serializers.SerializerMethodField()
+    announcements = serializers.SerializerMethodField()
+    events = serializers.SerializerMethodField()
+    schedules = serializers.SerializerMethodField()
+    janazah_notices = serializers.SerializerMethodField()
+
+    class Meta(MosqueListSerializer.Meta):
+        fields = MosqueListSerializer.Meta.fields + (
+            "photos",
+            "announcements",
+            "events",
+            "schedules",
+            "janazah_notices",
+        )
+        read_only_fields = fields
 
     def get_photos(self, obj):
         if hasattr(obj, "_prefetched_objects_cache") and "photos" in obj._prefetched_objects_cache:
@@ -251,6 +279,10 @@ class MosqueSerializer(serializers.ModelSerializer):
         else:
             notices = obj.janazah_notices.filter(status="published")
         return JanazahNoticeSerializer(notices, many=True, context=self.context).data
+
+
+# Alias for backward compatibility with existing tests and scripts
+MosqueSerializer = MosqueDetailSerializer
 
 
 

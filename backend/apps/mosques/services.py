@@ -35,6 +35,9 @@ def extract_coordinates_from_url(url: str) -> tuple[float, float] | tuple[None, 
             pass
 
     # 2. Extract coordinates using Regex patterns
+    from urllib.parse import unquote
+    final_url = unquote(final_url)
+    
     # Pattern A: Standard @latitude,longitude suffix
     match = re.search(r"@(-?\d+\.\d+),(-?\d+\.\d+)", final_url)
     if match:

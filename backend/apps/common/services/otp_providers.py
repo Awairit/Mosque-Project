@@ -19,6 +19,7 @@ import logging
 import random
 import string
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from datetime import timedelta
 from typing import Optional
 
@@ -29,6 +30,27 @@ from django.utils import timezone
 from apps.accounts.models import IdentityAuditLog, OTPVerification
 
 logger = logging.getLogger(__name__)
+
+
+class OTPErrorCode:
+    SUCCESS = "SUCCESS"
+    INVALID_PHONE = "INVALID_PHONE"
+    PROVIDER_UNAVAILABLE = "PROVIDER_UNAVAILABLE"
+    RATE_LIMITED = "RATE_LIMITED"
+    CONFIGURATION_ERROR = "CONFIGURATION_ERROR"
+    VERIFICATION_FAILED = "VERIFICATION_FAILED"
+    OTP_EXPIRED = "OTP_EXPIRED"
+    UNKNOWN_PROVIDER_ERROR = "UNKNOWN_PROVIDER_ERROR"
+
+
+@dataclass
+class ProviderResult:
+    success: bool
+    code: str
+    message: str
+    retryable: bool = False
+    provider: str = "unknown"
+    provider_code: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -46,7 +68,7 @@ class BaseOTPProvider(ABC):
     """
 
     @abstractmethod
-    def generate_and_send(self, mobile_number: str, purpose: str) -> bool:
+    def generate_and_send(self, mobile_number: str, purpose: str) -> ProviderResult:
         """Generate an OTP and deliver it to *mobile_number*.
 
         Args:
@@ -58,7 +80,7 @@ class BaseOTPProvider(ABC):
         """
 
     @abstractmethod
-    def verify(self, mobile_number: str, purpose: str, code: str) -> bool:
+    def verify(self, mobile_number: str, purpose: str, code: str) -> ProviderResult:
         """Verify a code that the user submitted.
 
         Args:
@@ -97,7 +119,7 @@ class DummyOTPProvider(BaseOTPProvider):
     def _generate_code(self) -> str:
         return "".join(random.choices(string.digits, k=self.OTP_LENGTH))
 
-    def generate_and_send(self, mobile_number: str, purpose: str) -> bool:
+    def generate_and_send(self, mobile_number: str, purpose: str) -> ProviderResult:
         # Invalidate any existing active OTPs for this number + purpose.
         OTPVerification.objects.filter(
             mobile_number=mobile_number,
@@ -130,11 +152,24 @@ class DummyOTPProvider(BaseOTPProvider):
             f"Your verification code is {code}. "
             f"It expires in {expiry_minutes} minutes."
         )
-        return self._notification_service().send_sms(
+        sent = self._notification_service().send_sms(
             recipient=mobile_number, message=message
         )
+        if sent:
+            return ProviderResult(
+                success=True,
+                code=OTPErrorCode.SUCCESS,
+                message="OTP sent successfully.",
+                provider="dummy",
+            )
+        return ProviderResult(
+            success=False,
+            code=OTPErrorCode.UNKNOWN_PROVIDER_ERROR,
+            message="Failed to send dummy OTP.",
+            provider="dummy",
+        )
 
-    def verify(self, mobile_number: str, purpose: str, code: str) -> bool:
+    def verify(self, mobile_number: str, purpose: str, code: str) -> ProviderResult:
         verification = (
             OTPVerification.objects.filter(
                 mobile_number=mobile_number,
@@ -146,17 +181,32 @@ class DummyOTPProvider(BaseOTPProvider):
         )
 
         if not verification:
-            return False
+            return ProviderResult(
+                success=False,
+                code=OTPErrorCode.VERIFICATION_FAILED,
+                message="Invalid request.",
+                provider="dummy",
+            )
 
         if verification.attempts >= verification.max_attempts:
             verification.is_active = False
             verification.save(update_fields=["is_active"])
-            return False
+            return ProviderResult(
+                success=False,
+                code=OTPErrorCode.VERIFICATION_FAILED,
+                message="Maximum attempts reached. Please request a new OTP.",
+                provider="dummy",
+            )
 
         if timezone.now() > verification.expires_at:
             verification.is_active = False
             verification.save(update_fields=["is_active"])
-            return False
+            return ProviderResult(
+                success=False,
+                code=OTPErrorCode.OTP_EXPIRED,
+                message="OTP has expired. Please request a new one.",
+                provider="dummy",
+            )
 
         verification.attempts += 1
 
@@ -164,10 +214,20 @@ class DummyOTPProvider(BaseOTPProvider):
             verification.verified_at = timezone.now()
             verification.is_active = False
             verification.save(update_fields=["attempts", "verified_at", "is_active"])
-            return True
+            return ProviderResult(
+                success=True,
+                code=OTPErrorCode.SUCCESS,
+                message="OTP verified successfully.",
+                provider="dummy",
+            )
 
         verification.save(update_fields=["attempts"])
-        return False
+        return ProviderResult(
+            success=False,
+            code=OTPErrorCode.VERIFICATION_FAILED,
+            message="Invalid OTP code.",
+            provider="dummy",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -221,7 +281,96 @@ class TwilioVerifyProvider(BaseOTPProvider):
             )
         return sid
 
-    def generate_and_send(self, mobile_number: str, purpose: str) -> bool:
+    def _map_twilio_exception(self, exc: Exception) -> ProviderResult:
+        """Map raw Twilio exceptions to ProviderResult."""
+        try:
+            from twilio.base.exceptions import TwilioRestException
+        except ImportError:
+            TwilioRestException = None
+
+        if TwilioRestException and isinstance(exc, TwilioRestException):
+            tw_code = getattr(exc, "code", None)
+            status = getattr(exc, "status", None)
+
+            # 21608: Trial account unverified number
+            if tw_code == 21608:
+                return ProviderResult(
+                    success=False,
+                    code=OTPErrorCode.PROVIDER_UNAVAILABLE,
+                    message="Trial account cannot send SMS to unverified number.",
+                    retryable=False,
+                    provider="twilio",
+                    provider_code=str(tw_code)
+                )
+
+            # 60200, 21614, 21211: Invalid mobile number
+            if tw_code in (60200, 21614, 21211, 20404):
+                return ProviderResult(
+                    success=False,
+                    code=OTPErrorCode.INVALID_PHONE,
+                    message="Invalid phone number.",
+                    retryable=False,
+                    provider="twilio",
+                    provider_code=str(tw_code)
+                )
+
+            # Rate Limits
+            if tw_code == 60203 or status == 429:
+                return ProviderResult(
+                    success=False,
+                    code=OTPErrorCode.RATE_LIMITED,
+                    message="Too many requests. Please try again later.",
+                    retryable=True,
+                    provider="twilio",
+                    provider_code=str(tw_code)
+                )
+            
+            # Authentication/Configuration Errors
+            if status in (401, 403) or tw_code in (20003,):
+                return ProviderResult(
+                    success=False,
+                    code=OTPErrorCode.CONFIGURATION_ERROR,
+                    message="SMS provider configuration error.",
+                    retryable=False,
+                    provider="twilio",
+                    provider_code=str(tw_code)
+                )
+                
+            return ProviderResult(
+                success=False,
+                code=OTPErrorCode.UNKNOWN_PROVIDER_ERROR,
+                message="An unexpected error occurred with the SMS provider.",
+                retryable=True,
+                provider="twilio",
+                provider_code=str(tw_code)
+            )
+
+        # For non-TwilioRestException (e.g. network timeouts, general python exceptions)
+        return ProviderResult(
+            success=False,
+            code=OTPErrorCode.PROVIDER_UNAVAILABLE,
+            message="SMS provider is temporarily unavailable.",
+            retryable=True,
+            provider="twilio",
+            provider_code=None
+        )
+
+    def _log_failure(self, mobile_number: str, purpose: str, result: ProviderResult, exc: Exception):
+        log_message = (
+            f"\n==================================================\n"
+            f"OTP Provider : Twilio Verify\n\n"
+            f"Phone: {mobile_number}\n"
+            f"Purpose: {purpose}\n"
+            f"Provider: {result.provider}\n"
+            f"Provider Code: {result.provider_code}\n"
+            f"Retryable: {result.retryable}\n\n"
+            f"Result:\nFAILED\n\n"
+            f"Reason:\n{str(exc)}\n"
+            f"==================================================\n"
+        )
+        logger.error(log_message)
+
+    def generate_and_send(self, mobile_number: str, purpose: str) -> ProviderResult:
         """Trigger Twilio Verify to send an SMS OTP to *mobile_number*."""
         if settings.DEBUG:
             print("\n" + "=" * 60)
@@ -252,22 +401,36 @@ class TwilioVerifyProvider(BaseOTPProvider):
                 verification.status,
                 purpose,
             )
-            return verification.status in ("pending", "approved")
-        except Exception as exc:
-            if settings.DEBUG:
-                print(f"❌ Twilio Exception: {str(exc)}")
-                print("=" * 60 + "\n")
-            logger.error(
-                "Twilio Verify send failed for %s (purpose=%s): %s",
-                mobile_number,
-                purpose,
-                exc,
+            success = verification.status in ("pending", "approved")
+            if success:
+                return ProviderResult(
+                    success=True,
+                    code=OTPErrorCode.SUCCESS,
+                    message="OTP sent successfully.",
+                    provider="twilio"
+                )
+            return ProviderResult(
+                success=False,
+                code=OTPErrorCode.UNKNOWN_PROVIDER_ERROR,
+                message=f"Failed with status: {verification.status}",
+                provider="twilio"
             )
-            if settings.DEBUG:
-                raise exc
-            return False
+        except RuntimeError as exc:
+            res = ProviderResult(
+                success=False,
+                code=OTPErrorCode.CONFIGURATION_ERROR,
+                message="Configuration error.",
+                retryable=False,
+                provider="twilio"
+            )
+            self._log_failure(mobile_number, purpose, res, exc)
+            return res
+        except Exception as exc:
+            res = self._map_twilio_exception(exc)
+            self._log_failure(mobile_number, purpose, res, exc)
+            return res
 
-    def verify(self, mobile_number: str, purpose: str, code: str) -> bool:
+    def verify(self, mobile_number: str, purpose: str, code: str) -> ProviderResult:
         """Ask Twilio Verify whether *code* is correct for *mobile_number*."""
         if settings.DEBUG:
             print("\n" + "=" * 60)
@@ -299,20 +462,33 @@ class TwilioVerifyProvider(BaseOTPProvider):
                 purpose,
                 check.status,
             )
-            return approved
-        except Exception as exc:
-            if settings.DEBUG:
-                print(f"❌ Twilio Exception: {str(exc)}")
-                print("=" * 60 + "\n")
-            logger.error(
-                "Twilio Verify check failed for %s (purpose=%s): %s",
-                mobile_number,
-                purpose,
-                exc,
+            if approved:
+                return ProviderResult(
+                    success=True,
+                    code=OTPErrorCode.SUCCESS,
+                    message="OTP verified successfully.",
+                    provider="twilio"
+                )
+            return ProviderResult(
+                success=False,
+                code=OTPErrorCode.VERIFICATION_FAILED,
+                message="Invalid OTP code.",
+                provider="twilio"
             )
-            if settings.DEBUG:
-                raise exc
-            return False
+        except RuntimeError as exc:
+            res = ProviderResult(
+                success=False,
+                code=OTPErrorCode.CONFIGURATION_ERROR,
+                message="Configuration error.",
+                retryable=False,
+                provider="twilio"
+            )
+            self._log_failure(mobile_number, purpose, res, exc)
+            return res
+        except Exception as exc:
+            res = self._map_twilio_exception(exc)
+            self._log_failure(mobile_number, purpose, res, exc)
+            return res
 
 
 # ---------------------------------------------------------------------------

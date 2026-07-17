@@ -32,6 +32,12 @@ class LocationParserTests(TestCase):
         self.assertEqual(lat3, 19.157829)
         self.assertEqual(lon3, 77.335382)
 
+    def test_regex_pattern_b_url_encoded(self):
+        url = "https://www.google.com/maps/search/?api=1&query=19.157829%2C77.335382"
+        lat, lon = extract_coordinates_from_url(url)
+        self.assertEqual(lat, 19.157829)
+        self.assertEqual(lon, 77.335382)
+
     def test_regex_pattern_c_place_path(self):
         url = "https://www.google.com/maps/place/19.157829,77.335382"
         lat, lon = extract_coordinates_from_url(url)

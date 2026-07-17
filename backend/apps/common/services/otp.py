@@ -21,7 +21,7 @@ from typing import Optional
 from django.contrib.auth import get_user_model
 
 from apps.accounts.models import IdentityAuditLog
-from apps.common.services.otp_providers import get_otp_provider
+from apps.common.services.otp_providers import get_otp_provider, ProviderResult
 
 logger = logging.getLogger(__name__)
 
@@ -40,10 +40,10 @@ class OTPService:
         mobile_number: str,
         purpose: str,
         user: Optional[object] = None,
-    ) -> bool:
+    ) -> ProviderResult:
         """Generate an OTP and send it to *mobile_number*.
 
-        Returns True if the OTP was dispatched successfully.
+        Returns ProviderResult indicating success or structured failure details.
         """
         provider = get_otp_provider()
 
@@ -54,17 +54,22 @@ class OTPService:
             metadata={"mobile_number": mobile_number, "purpose": purpose},
         )
 
-        success = provider.generate_and_send(mobile_number=mobile_number, purpose=purpose)
+        result = provider.generate_and_send(mobile_number=mobile_number, purpose=purpose)
+
+        metadata = {"mobile_number": mobile_number, "purpose": purpose}
+        if not result.success:
+            metadata["error_code"] = result.code
+            metadata["error_message"] = result.message
 
         # Audit: send outcome
         IdentityAuditLog.objects.create(
             user=user,
             action=IdentityAuditLog.Action.OTP_SENT,
-            status="success" if success else "failed",
-            metadata={"mobile_number": mobile_number, "purpose": purpose},
+            status="success" if result.success else "failed",
+            metadata=metadata,
         )
 
-        return success
+        return result
 
     @classmethod
     def verify_otp(
@@ -73,27 +78,31 @@ class OTPService:
         purpose: str,
         otp: str,
         user: Optional[object] = None,
-    ) -> bool:
+    ) -> ProviderResult:
         """Verify an OTP submitted by the user.
 
-        Returns True if the code is valid and the verification succeeded.
+        Returns ProviderResult indicating success or structured failure details.
         """
         provider = get_otp_provider()
 
-        verified = provider.verify(mobile_number=mobile_number, purpose=purpose, code=otp)
+        result = provider.verify(mobile_number=mobile_number, purpose=purpose, code=otp)
 
-        if verified:
+        metadata = {"mobile_number": mobile_number, "purpose": purpose}
+        
+        if result.success:
             IdentityAuditLog.objects.create(
                 user=user,
                 action=IdentityAuditLog.Action.OTP_VERIFIED,
-                metadata={"mobile_number": mobile_number, "purpose": purpose},
+                metadata=metadata,
             )
         else:
+            metadata["error_code"] = result.code
+            metadata["error_message"] = result.message
             IdentityAuditLog.objects.create(
                 user=user,
                 action=IdentityAuditLog.Action.OTP_FAILED,
                 status="invalid_code",
-                metadata={"mobile_number": mobile_number, "purpose": purpose},
+                metadata=metadata,
             )
 
-        return verified
+        return result

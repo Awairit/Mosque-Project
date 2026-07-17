@@ -1,10 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, memo, useCallback } from "react";
 import { apiRequest } from "@/lib/api/client";
 import { MapFilters, FilterState } from "./MapFilters";
 import { MosqueMap } from "./MosqueMap";
+import { formatDistance, formatTimeTo12Hour, formatRelativeTime } from "@/lib/utils/formatters";
+import { getPreviewFacilities } from "@/lib/constants/facilities";
+import { LABELS } from "@/lib/constants/labels";
 
 type LocationState = "idle" | "requesting" | "granted" | "denied" | "unsupported";
 
@@ -16,6 +19,8 @@ type PrayerTiming = {
   isha_time: string;
   jumuah_time: string;
   effective_from: string;
+  /** ISO 8601 UTC timestamp: when congregation timings were last saved. */
+  updated_at?: string | null;
 };
 
 type OperatingStatus = {
@@ -36,10 +41,22 @@ type MosquePreview = {
   latitude: number | string | null;
   longitude: number | string | null;
   women_prayer_available: boolean;
+  separate_women_entrance: boolean;
   parking_available: boolean;
   wudu_facility_available: boolean;
   wheelchair_accessible: boolean;
-  separate_women_entrance: boolean;
+  drinking_water_available?: boolean;
+  washrooms_available?: boolean;
+  library_available?: boolean;
+  quran_classes_available?: boolean;
+  hifz_program_available?: boolean;
+  nikah_service_available?: boolean;
+  muslim_burial_ground_available?: boolean;
+  community_hall_available?: boolean;
+  ramadan_iftar_available?: boolean;
+  eid_prayer_ground_available?: boolean;
+  zakat_collection_available?: boolean;
+  funeral_prayer_facility_available?: boolean;
   mosque_status: string;
   prayer_timing?: PrayerTiming | null;
   operating_status?: OperatingStatus | null;
@@ -106,17 +123,6 @@ type Event = {
   speaker_name?: string;
 };
 
-const formatTimeTo12Hour = (timeStr?: string | null) => {
-  if (!timeStr) return "";
-  const parts = timeStr.split(":");
-  if (parts.length < 2) return timeStr;
-  let hour = parseInt(parts[0], 10);
-  const minute = parts[1];
-  const ampm = hour >= 12 ? "PM" : "AM";
-  hour = hour % 12;
-  hour = hour ? hour : 12;
-  return `${hour}:${minute} ${ampm}`;
-};
 
 const getNextPrayerIndex = (prayersList: Prayer[]) => {
   if (typeof window === "undefined" || prayersList.length === 0) return 2; // Default to index 2 (Asr)
@@ -148,7 +154,7 @@ interface LocationButtonProps {
   onClick: () => void;
 }
 
-function LocationButton({ state, onClick }: LocationButtonProps) {
+const LocationButton = memo(function LocationButton({ state, onClick }: LocationButtonProps) {
   const label = useMemo(() => {
     switch (state) {
       case "requesting":
@@ -174,7 +180,7 @@ function LocationButton({ state, onClick }: LocationButtonProps) {
       {label}
     </button>
   );
-}
+});
 
 interface CurrentPrayerCardProps {
   cityTimings: CityTimings | null;
@@ -185,7 +191,7 @@ interface CurrentPrayerCardProps {
   onCityChange: (cityId: string) => void;
 }
 
-function CurrentPrayerCard({
+const CurrentPrayerCard = memo(function CurrentPrayerCard({
   cityTimings,
   isLoading,
   hasError,
@@ -305,7 +311,7 @@ function CurrentPrayerCard({
       )}
     </section>
   );
-}
+});
 
 interface ApprovedMosquesCardProps {
   mosques: MosquePreview[];
@@ -313,14 +319,8 @@ interface ApprovedMosquesCardProps {
   hasError: boolean;
 }
 
-function ApprovedMosquesCard({ mosques, isLoading, hasError }: ApprovedMosquesCardProps) {
-  const formatDistance = (meters?: number | null) => {
-    if (meters === undefined || meters === null) return "";
-    if (meters < 1000) {
-      return `${Math.round(meters)} meters away`;
-    }
-    return `${(meters / 1000).toFixed(1)} km away`;
-  };
+const ApprovedMosquesCard = memo(function ApprovedMosquesCard({ mosques, isLoading, hasError }: ApprovedMosquesCardProps) {
+
 
   const handleNavigateNow = (m: MosquePreview) => {
     if (m.latitude === null || m.longitude === null) return;
@@ -450,11 +450,28 @@ function ApprovedMosquesCard({ mosques, isLoading, hasError }: ApprovedMosquesCa
                       {[mosque.city, mosque.address].filter(Boolean).join(" · ") ||
                         "Location details pending"}
                     </p>
-                    {mosque.distance !== undefined && mosque.distance !== null && (
-                      <p className="mt-1 text-xs font-semibold text-emerald-800">
-                        {formatDistance(mosque.distance)}
-                      </p>
-                    )}
+                    {/* Distance (left) + Last Updated (right) — single flex row */}
+                    {(mosque.distance !== undefined && mosque.distance !== null) || mosque.prayer_timing?.updated_at ? (
+                      <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5">
+                        {mosque.distance !== undefined && mosque.distance !== null && (
+                          <p className="text-xs font-semibold text-emerald-800">
+                            {formatDistance(mosque.distance)}
+                          </p>
+                        )}
+                        {mosque.prayer_timing?.updated_at && (() => {
+                          const relativeTime = formatRelativeTime(mosque.prayer_timing.updated_at);
+                          return (
+                            <p
+                              className="text-[10px] text-slate-500"
+                              aria-label={`${LABELS.LAST_UPDATED}: ${relativeTime}`}
+                            >
+                              <span aria-hidden="true">🕒</span>{" "}
+                              {LABELS.LAST_UPDATED}: {relativeTime}
+                            </p>
+                          );
+                        })()}
+                      </div>
+                    ) : null}
                   </div>
                   <div className="flex flex-col items-end gap-1.5">
                     {getStatusBadge(mosque.operating_status)}
@@ -469,7 +486,7 @@ function ApprovedMosquesCard({ mosques, isLoading, hasError }: ApprovedMosquesCa
                 {/* Next Jamaat Highlight */}
                 {mosque.operating_status?.next_prayer_name && mosque.operating_status.next_prayer_time && (
                   <div className="mt-2.5 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[10px] font-semibold text-slate-700">
-                    📢 Next Congregation: <span className="text-emerald-800 font-bold">{mosque.operating_status.next_prayer_name}</span> at <span className="font-mono">{formatTimeTo12Hour(mosque.operating_status.next_prayer_time)}</span>
+                    📢 {LABELS.NEXT_JAMAAT}: <span className="text-emerald-800 font-bold">{mosque.operating_status.next_prayer_name}</span> at <span className="font-mono">{formatTimeTo12Hour(mosque.operating_status.next_prayer_time)}</span>
                   </div>
                 )}
 
@@ -515,28 +532,23 @@ function ApprovedMosquesCard({ mosques, isLoading, hasError }: ApprovedMosquesCa
 
                 {/* Facilities List & Action */}
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2.5">
-                  <div className="flex flex-wrap gap-1">
-                    {mosque.women_prayer_available && (
-                      <span className="rounded-full bg-white border border-slate-200/60 px-2 py-0.5 text-[9px] text-slate-600">
-                        🚺 Women Space
-                      </span>
-                    )}
-                    {mosque.parking_available && (
-                      <span className="rounded-full bg-white border border-slate-200/60 px-2 py-0.5 text-[9px] text-slate-600">
-                        🚗 Parking
-                      </span>
-                    )}
-                    {mosque.wudu_facility_available && (
-                      <span className="rounded-full bg-white border border-slate-200/60 px-2 py-0.5 text-[9px] text-slate-600">
-                        💧 Wudu
-                      </span>
-                    )}
-                    {mosque.wheelchair_accessible && (
-                      <span className="rounded-full bg-white border border-slate-200/60 px-2 py-0.5 text-[9px] text-slate-600">
-                        ♿ Wheelchair
-                      </span>
-                    )}
-                  </div>
+                  {(() => {
+                    const { preview, remainingCount } = getPreviewFacilities(mosque, 6);
+                    return (
+                      <div className="flex flex-wrap gap-1">
+                        {preview.map((f) => (
+                          <span key={f.key} className="rounded-full bg-white border border-slate-200/60 px-2 py-0.5 text-[9px] text-slate-600">
+                            {f.icon} {f.label}
+                          </span>
+                        ))}
+                        {remainingCount > 0 && (
+                          <span className="rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-[9px] text-slate-500 font-medium">
+                            +{remainingCount} more
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
                   <div className="flex items-center gap-3">
                     <Link
                       href={`/mosque/${mosque.id}`}
@@ -561,7 +573,7 @@ function ApprovedMosquesCard({ mosques, isLoading, hasError }: ApprovedMosquesCa
       </div>
     </section>
   );
-}
+});
 
 export function HomeHero() {
   const [locationState, setLocationState] = useState<LocationState>("idle");
@@ -597,9 +609,29 @@ export function HomeHero() {
     jumuahAvailable: false,
   });
 
-  const handleToggleFilter = (key: keyof FilterState) => {
+  const handleToggleFilter = useCallback((key: keyof FilterState) => {
     setFilters((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
+  }, []);
+
+  // Load cached coordinates from sessionStorage on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = sessionStorage.getItem("mosque_user_coords");
+        if (cached) {
+          const { coords: parsedCoords, timestamp } = JSON.parse(cached);
+          if (Date.now() - timestamp < 300000) {
+            setCoords(parsedCoords);
+            setLocationState("granted");
+          } else {
+            sessionStorage.removeItem("mosque_user_coords");
+          }
+        }
+      } catch (err) {
+        console.error("Failed to parse cached user coordinates", err);
+      }
+    }
+  }, []);
 
   // 1. Fetch Cities List on Mount
   useEffect(() => {
@@ -630,106 +662,129 @@ export function HomeHero() {
     };
   }, []);
 
-  // 2. Load timings and Top 5 nearby mosques based on GPS/city selection & Filters
+  // Effect A — Load city timings, announcements, and events.
+  // Fires on location/city change only. Filter changes do NOT trigger this effect.
+  // This prevents redundant timings refetches when the user toggles a facility filter.
   useEffect(() => {
     let isMounted = true;
 
-    async function loadData() {
+    async function loadTimings() {
       setLoadingTimings(true);
-      setLoadingMosques(true);
-      
+
+      let timingsPath = "/locations/city-timings/";
+
+      if (locationState === "granted" && coords) {
+        timingsPath += `?lat=${coords.lat}&lon=${coords.lon}`;
+      } else if (selectedCity) {
+        timingsPath += `?city=${selectedCity}`;
+      }
+
       try {
-        let timingsPath = "/locations/city-timings/";
-        let mosquesPath = "/mosques/";
+        const timingResponse = await apiRequest<CityTimings>({ path: timingsPath, cache: "no-store" });
+        if (isMounted) {
+          setCityTimings(timingResponse);
+          setTimingsError(false);
 
-        if (locationState === "granted" && coords) {
-          timingsPath += `?lat=${coords.lat}&lon=${coords.lon}`;
-          mosquesPath += `?lat=${coords.lat}&lon=${coords.lon}`;
-        } else if (selectedCity) {
-          timingsPath += `?city=${selectedCity}`;
-          const activeCity = cities.find((c) => String(c.id) === selectedCity);
-          if (activeCity) {
-            mosquesPath += `?lat=${activeCity.latitude}&lon=${activeCity.longitude}`;
+          // Sync selected city from GPS-resolved city details
+          if (timingResponse.city_details && String(timingResponse.city_details.id) !== selectedCity && locationState === "granted") {
+            setSelectedCity(String(timingResponse.city_details.id));
+          }
+
+          // Fire announcements + events in parallel (both depend on cityId from timings response)
+          const cityId = timingResponse.city || timingResponse.city_details?.id;
+          if (cityId) {
+            setLoadingAnnouncements(true);
+            setLoadingEvents(true);
+
+            Promise.all([
+              apiRequest<any>({ path: `/public/announcements/?city_id=${cityId}`, cache: "no-store" }),
+              apiRequest<any>({ path: `/public/events/?city_id=${cityId}`, cache: "no-store" }),
+            ])
+              .then(([announcementsRes, eventsRes]) => {
+                if (isMounted) {
+                  setAnnouncements(announcementsRes || []);
+                  setEvents(eventsRes || []);
+                }
+              })
+              .catch(() => {})
+              .finally(() => {
+                if (isMounted) {
+                  setLoadingAnnouncements(false);
+                  setLoadingEvents(false);
+                }
+              });
           }
         }
-
-        // Apply shared filters to the Top 5 API query path
-        let filterParams = "";
-        if (filters.openNow) filterParams += "&open_now=true";
-        if (filters.womenPrayerAvailable) filterParams += "&women_prayer_available=true";
-        if (filters.wuduFacilityAvailable) filterParams += "&wudu_facility_available=true";
-        if (filters.parkingAvailable) filterParams += "&parking_available=true";
-        if (filters.wheelchairAccessible) filterParams += "&wheelchair_accessible=true";
-        if (filters.jumuahAvailable) filterParams += "&jumuah_available=true";
-
-        if (filterParams) {
-          mosquesPath += (mosquesPath.includes("?") ? "" : "?") + filterParams.substring(1);
-        }
-
-        // Fetch Timings
-        try {
-          const timingResponse = await apiRequest<CityTimings>({ path: timingsPath, cache: "no-store" });
-          if (isMounted) {
-            setCityTimings(timingResponse);
-            setTimingsError(false);
-            if (timingResponse.city_details && String(timingResponse.city_details.id) !== selectedCity && locationState === "granted") {
-              setSelectedCity(String(timingResponse.city_details.id));
-            }
-
-            // Load announcements and events
-            const cityId = timingResponse.city || timingResponse.city_details?.id;
-            if (cityId) {
-              setLoadingAnnouncements(true);
-              apiRequest<any>({ path: `/public/announcements/?city_id=${cityId}`, cache: "no-store" })
-                .then((res) => {
-                  if (isMounted) setAnnouncements(res || []);
-                })
-                .catch(() => {})
-                .finally(() => {
-                  if (isMounted) setLoadingAnnouncements(false);
-                });
-
-              setLoadingEvents(true);
-              apiRequest<any>({ path: `/public/events/?city_id=${cityId}`, cache: "no-store" })
-                .then((res) => {
-                  if (isMounted) setEvents(res || []);
-                })
-                .catch(() => {})
-                .finally(() => {
-                  if (isMounted) setLoadingEvents(false);
-                });
-            }
-          }
-        } catch {
-          if (isMounted) setTimingsError(true);
-        } finally {
-          if (isMounted) setLoadingTimings(false);
-        }
-
-        // Fetch Top 5 Mosques
-        try {
-          const mosquesResponse = await apiRequest<MosqueListResponse>({ path: mosquesPath, cache: "no-store" });
-          if (isMounted) {
-            setMosques(mosquesResponse.results);
-            setMosquesError(false);
-          }
-        } catch {
-          if (isMounted) setMosquesError(true);
-        } finally {
-          if (isMounted) setLoadingMosques(false);
-        }
-
-      } catch (err) {
-        console.error("General error loading data", err);
+      } catch {
+        if (isMounted) setTimingsError(true);
+      } finally {
+        if (isMounted) setLoadingTimings(false);
       }
     }
 
-    loadData();
+    loadTimings();
+
+    return () => {
+      isMounted = false;
+    };
+    // Intentionally excludes `filters` — filter changes must not retrigger timings.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locationState, coords, selectedCity, cities]);
+
+  // Effect B — Load top 5 nearest mosques.
+  // Fires on location, city, OR filter change. Timings are NOT re-fetched here.
+  // F3: mosques fetch now runs concurrently with timings (they are in separate effects
+  // that both fire on location/city change, so they start at the same time).
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadMosques() {
+      setLoadingMosques(true);
+
+      let mosquesPath = "/mosques/";
+
+      if (locationState === "granted" && coords) {
+        mosquesPath += `?lat=${coords.lat}&lon=${coords.lon}`;
+      } else if (selectedCity) {
+        const activeCity = cities.find((c) => String(c.id) === selectedCity);
+        if (activeCity) {
+          mosquesPath += `?lat=${activeCity.latitude}&lon=${activeCity.longitude}`;
+        }
+      }
+
+      // Apply shared filters
+      let filterParams = "";
+      if (filters.openNow) filterParams += "&open_now=true";
+      if (filters.womenPrayerAvailable) filterParams += "&women_prayer_available=true";
+      if (filters.wuduFacilityAvailable) filterParams += "&wudu_facility_available=true";
+      if (filters.parkingAvailable) filterParams += "&parking_available=true";
+      if (filters.wheelchairAccessible) filterParams += "&wheelchair_accessible=true";
+      if (filters.jumuahAvailable) filterParams += "&jumuah_available=true";
+
+      if (filterParams) {
+        mosquesPath += (mosquesPath.includes("?") ? "" : "?") + filterParams.substring(1);
+      }
+
+      try {
+        const mosquesResponse = await apiRequest<MosqueListResponse>({ path: mosquesPath, cache: "no-store" });
+        if (isMounted) {
+          setMosques(mosquesResponse.results);
+          setMosquesError(false);
+        }
+      } catch {
+        if (isMounted) setMosquesError(true);
+      } finally {
+        if (isMounted) setLoadingMosques(false);
+      }
+    }
+
+    loadMosques();
 
     return () => {
       isMounted = false;
     };
   }, [locationState, coords, selectedCity, cities, filters]);
+
 
   // 3. Load Map Viewport Mosques dynamically on Bounds / Filters change
   useEffect(() => {
@@ -785,7 +840,7 @@ export function HomeHero() {
     return { lat: 19.15, lon: 77.30 }; // Default to Nanded
   }, [locationState, coords, selectedCity, cities]);
 
-  const handleLocationRequest = () => {
+  const handleLocationRequest = useCallback(() => {
     if (!("geolocation" in navigator)) {
       setLocationState("unsupported");
       return;
@@ -796,10 +851,24 @@ export function HomeHero() {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setLocationState("granted");
-        setCoords({
+        const userLoc = {
           lat: position.coords.latitude,
           lon: position.coords.longitude,
-        });
+        };
+        setCoords(userLoc);
+        if (typeof window !== "undefined") {
+          try {
+            sessionStorage.setItem(
+              "mosque_user_coords",
+              JSON.stringify({
+                coords: userLoc,
+                timestamp: Date.now(),
+              })
+            );
+          } catch (err) {
+            console.error("Failed to save user coordinates to sessionStorage", err);
+          }
+        }
       },
       () => setLocationState("denied"),
       {
@@ -808,13 +877,20 @@ export function HomeHero() {
         timeout: 9000,
       },
     );
-  };
+  }, []);
 
-  const handleCityChange = (cityId: string) => {
+  const handleCityChange = useCallback((cityId: string) => {
     setSelectedCity(cityId);
     setLocationState("idle");
     setCoords(null);
-  };
+    if (typeof window !== "undefined") {
+      try {
+        sessionStorage.removeItem("mosque_user_coords");
+      } catch (err) {
+        console.error("Failed to remove user coordinates from sessionStorage", err);
+      }
+    }
+  }, []);
 
   return (
     <section className="relative isolate overflow-hidden bg-[#F4F7F5] px-4 pt-4 pb-8 sm:px-6 sm:pt-6 sm:pb-10 lg:px-8 lg:pt-12 lg:pb-16">

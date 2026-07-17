@@ -184,11 +184,21 @@ class ForgotPasswordRequestAPIView(APIView):
             return Response({"detail": "If the number exists, an OTP has been sent."}, status=status.HTTP_200_OK)
             
         from apps.common.services.otp import OTPService
-        OTPService.generate_and_send_otp(
+        from apps.common.services.otp_providers import OTPErrorCode
+        
+        result = OTPService.generate_and_send_otp(
             mobile_number=normalized, 
             purpose="forgot_password",
             user=mosque_admin.user
         )
+        
+        if not result.success:
+            if result.code == OTPErrorCode.RATE_LIMITED:
+                return Response({"mobile_number": [result.message]}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            elif result.code in (OTPErrorCode.PROVIDER_UNAVAILABLE, OTPErrorCode.CONFIGURATION_ERROR):
+                return Response({"mobile_number": [result.message]}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            else:
+                return Response({"mobile_number": [result.message]}, status=status.HTTP_400_BAD_REQUEST)
         
         return Response({"detail": "If the number exists, an OTP has been sent."}, status=status.HTTP_200_OK)
 
@@ -219,15 +229,22 @@ class ForgotPasswordVerifyAPIView(APIView):
             return Response({"non_field_errors": ["Invalid request."]}, status=status.HTTP_400_BAD_REQUEST)
             
         from apps.common.services.otp import OTPService
-        is_valid = OTPService.verify_otp(
+        from apps.common.services.otp_providers import OTPErrorCode
+        
+        result = OTPService.verify_otp(
             mobile_number=normalized,
             purpose="forgot_password",
             otp=otp,
             user=mosque_admin.user
         )
         
-        if not is_valid:
-            return Response({"non_field_errors": ["Invalid or expired OTP."]}, status=status.HTTP_400_BAD_REQUEST)
+        if not result.success:
+            if result.code == OTPErrorCode.RATE_LIMITED:
+                return Response({"non_field_errors": [result.message]}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            elif result.code in (OTPErrorCode.PROVIDER_UNAVAILABLE, OTPErrorCode.CONFIGURATION_ERROR):
+                return Response({"non_field_errors": [result.message]}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            else:
+                return Response({"non_field_errors": [result.message]}, status=status.HTTP_400_BAD_REQUEST)
             
         # Generate a temporary reset token signed with the normalized E.164 number
         from django.core.signing import TimestampSigner

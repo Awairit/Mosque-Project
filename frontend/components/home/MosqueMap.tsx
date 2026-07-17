@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import dynamic from "next/dynamic";
 
 // Define Types for wrapper safety
@@ -29,9 +30,22 @@ type MosquePreview = {
   latitude: number | string | null;
   longitude: number | string | null;
   women_prayer_available: boolean;
+  separate_women_entrance?: boolean;
   parking_available: boolean;
   wudu_facility_available: boolean;
   wheelchair_accessible: boolean;
+  drinking_water_available?: boolean;
+  washrooms_available?: boolean;
+  library_available?: boolean;
+  quran_classes_available?: boolean;
+  hifz_program_available?: boolean;
+  nikah_service_available?: boolean;
+  muslim_burial_ground_available?: boolean;
+  community_hall_available?: boolean;
+  ramadan_iftar_available?: boolean;
+  eid_prayer_ground_available?: boolean;
+  zakat_collection_available?: boolean;
+  funeral_prayer_facility_available?: boolean;
   prayer_timing?: PrayerTiming | null;
   operating_status?: OperatingStatus | null;
   distance?: number | null;
@@ -48,12 +62,12 @@ interface MosqueMapProps {
 const MosqueMapInner = dynamic(() => import("./MosqueMapInner"), {
   ssr: false,
   loading: () => (
-    <div className="flex h-[480px] w-full animate-pulse items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-400">
+    <div className="flex h-[320px] sm:h-[400px] md:h-[480px] w-full animate-pulse items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-400">
       Loading interactive map details...
     </div>
   ),
 });
 
-export function MosqueMap(props: MosqueMapProps) {
+export const MosqueMap = memo(function MosqueMap(props: MosqueMapProps) {
   return <MosqueMapInner {...props} />;
-}
+});
