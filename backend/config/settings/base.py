@@ -34,6 +34,8 @@ DJANGO_APPS = [
 ]
 
 THIRD_PARTY_APPS = [
+    "cloudinary_storage",
+    "cloudinary",
     "corsheaders",
     "rest_framework",
     "rest_framework.authtoken",
@@ -166,4 +168,16 @@ OTP_PROVIDER = env("OTP_PROVIDER", default="dummy")
 TWILIO_ACCOUNT_SID = env("TWILIO_ACCOUNT_SID", default="")
 TWILIO_AUTH_TOKEN = env("TWILIO_AUTH_TOKEN", default="")
 TWILIO_VERIFY_SERVICE_SID = env("TWILIO_VERIFY_SERVICE_SID", default="")
+
+
+# ---------------------------------------------------------------------------
+# Cloudinary Storage Configuration
+# ---------------------------------------------------------------------------
+CLOUDINARY_STORAGE = {
+    "CLOUD_NAME": env("CLOUDINARY_CLOUD_NAME", default="dummy_cloud"),
+    "API_KEY": env("CLOUDINARY_API_KEY", default="dummy_key"),
+    "API_SECRET": env("CLOUDINARY_API_SECRET", default="dummy_secret"),
+}
+
+
 
