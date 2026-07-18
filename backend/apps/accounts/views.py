@@ -246,10 +246,16 @@ class ForgotPasswordVerifyAPIView(APIView):
             else:
                 return Response({"non_field_errors": [result.message]}, status=status.HTTP_400_BAD_REQUEST)
             
-        # Generate a temporary reset token signed with the normalized E.164 number
+        # Invalidate-on-use token payload: "mobile_number:last_changed_timestamp"
+        user = mosque_admin.user
+        last_changed = mosque_admin.password_changed_at or mosque_admin.last_password_reset_at or user.date_joined
+        last_changed_str = str(last_changed.timestamp() if hasattr(last_changed, "timestamp") else last_changed)
+        
+        payload = f"{normalized}:{last_changed_str}"
+        
         from django.core.signing import TimestampSigner
         signer = TimestampSigner()
-        reset_token = signer.sign(normalized)
+        reset_token = signer.sign(payload)
         
         return Response({
             "detail": "OTP verified successfully.",
@@ -275,7 +281,10 @@ class ForgotPasswordResetAPIView(APIView):
         
         try:
             # Token valid for 15 minutes
-            mobile_number = signer.unsign(reset_token, max_age=900)
+            payload = signer.unsign(reset_token, max_age=900)
+            if ":" not in payload:
+                return Response({"non_field_errors": ["Invalid reset token."]}, status=status.HTTP_400_BAD_REQUEST)
+            mobile_number, last_changed_str = payload.rsplit(":", 1)
             from apps.common.utils.strings import normalize_phone_number
             normalized = normalize_phone_number(mobile_number)
         except (BadSignature, SignatureExpired, ValueError):
@@ -290,6 +299,13 @@ class ForgotPasswordResetAPIView(APIView):
             return Response({"non_field_errors": ["User not found."]}, status=status.HTTP_400_BAD_REQUEST)
             
         user = mosque_admin.user
+        current_changed = mosque_admin.password_changed_at or mosque_admin.last_password_reset_at or user.date_joined
+        current_changed_str = str(current_changed.timestamp() if hasattr(current_changed, "timestamp") else current_changed)
+        
+        # Verify token has not already been used (single-use validation)
+        if current_changed_str != last_changed_str:
+            return Response({"non_field_errors": ["This reset token has already been used."]}, status=status.HTTP_400_BAD_REQUEST)
+            
         user.set_password(new_password)
         user.save()
         
