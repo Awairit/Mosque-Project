@@ -175,13 +175,21 @@ class ForgotPasswordRequestAPIView(APIView):
             return Response({"mobile_number": [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
 
         local_digits = normalized.replace("+91", "")
+        user = None
         try:
             mosque_admin = MosqueAdmin.objects.get(
                 Q(mobile_number=normalized) | Q(mobile_number=local_digits)
             )
+            user = mosque_admin.user
         except MosqueAdmin.DoesNotExist:
-            # Return 200 to prevent user enumeration
-            return Response({"detail": "If the number exists, an OTP has been sent."}, status=status.HTTP_200_OK)
+            try:
+                city_admin = CityAdmin.objects.get(
+                    Q(mobile_number=normalized) | Q(mobile_number=local_digits)
+                )
+                user = city_admin.user
+            except CityAdmin.DoesNotExist:
+                # Return 200 to prevent user enumeration
+                return Response({"detail": "If the number exists, an OTP has been sent."}, status=status.HTTP_200_OK)
             
         from apps.common.services.otp import OTPService
         from apps.common.services.otp_providers import OTPErrorCode
@@ -189,7 +197,7 @@ class ForgotPasswordRequestAPIView(APIView):
         result = OTPService.generate_and_send_otp(
             mobile_number=normalized, 
             purpose="forgot_password",
-            user=mosque_admin.user
+            user=user
         )
         
         if not result.success:
@@ -201,6 +209,7 @@ class ForgotPasswordRequestAPIView(APIView):
                 return Response({"mobile_number": [result.message]}, status=status.HTTP_400_BAD_REQUEST)
         
         return Response({"detail": "If the number exists, an OTP has been sent."}, status=status.HTTP_200_OK)
+
 
 class ForgotPasswordVerifyAPIView(APIView):
     """Verify the OTP for password reset."""
@@ -221,21 +230,30 @@ class ForgotPasswordVerifyAPIView(APIView):
             return Response({"non_field_errors": [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
 
         local_digits = normalized.replace("+91", "")
+        profile = None
         try:
             mosque_admin = MosqueAdmin.objects.get(
                 Q(mobile_number=normalized) | Q(mobile_number=local_digits)
             )
+            profile = mosque_admin
         except MosqueAdmin.DoesNotExist:
-            return Response({"non_field_errors": ["Invalid request."]}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                city_admin = CityAdmin.objects.get(
+                    Q(mobile_number=normalized) | Q(mobile_number=local_digits)
+                )
+                profile = city_admin
+            except CityAdmin.DoesNotExist:
+                return Response({"non_field_errors": ["Invalid request."]}, status=status.HTTP_400_BAD_REQUEST)
             
         from apps.common.services.otp import OTPService
         from apps.common.services.otp_providers import OTPErrorCode
         
+        user = profile.user
         result = OTPService.verify_otp(
             mobile_number=normalized,
             purpose="forgot_password",
             otp=otp,
-            user=mosque_admin.user
+            user=user
         )
         
         if not result.success:
@@ -247,8 +265,7 @@ class ForgotPasswordVerifyAPIView(APIView):
                 return Response({"non_field_errors": [result.message]}, status=status.HTTP_400_BAD_REQUEST)
             
         # Invalidate-on-use token payload: "mobile_number:last_changed_timestamp"
-        user = mosque_admin.user
-        last_changed = mosque_admin.password_changed_at or mosque_admin.last_password_reset_at or user.date_joined
+        last_changed = profile.password_changed_at or profile.last_password_reset_at or user.date_joined
         last_changed_str = str(last_changed.timestamp() if hasattr(last_changed, "timestamp") else last_changed)
         
         payload = f"{normalized}:{last_changed_str}"
@@ -261,6 +278,7 @@ class ForgotPasswordVerifyAPIView(APIView):
             "detail": "OTP verified successfully.",
             "reset_token": reset_token
         }, status=status.HTTP_200_OK)
+
 
 class ForgotPasswordResetAPIView(APIView):
     """Reset the password using the verified token."""
@@ -291,15 +309,23 @@ class ForgotPasswordResetAPIView(APIView):
             return Response({"non_field_errors": ["Invalid or expired reset token."]}, status=status.HTTP_400_BAD_REQUEST)
             
         local_digits = normalized.replace("+91", "")
+        profile = None
         try:
             mosque_admin = MosqueAdmin.objects.get(
                 Q(mobile_number=normalized) | Q(mobile_number=local_digits)
             )
+            profile = mosque_admin
         except MosqueAdmin.DoesNotExist:
-            return Response({"non_field_errors": ["User not found."]}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                city_admin = CityAdmin.objects.get(
+                    Q(mobile_number=normalized) | Q(mobile_number=local_digits)
+                )
+                profile = city_admin
+            except CityAdmin.DoesNotExist:
+                return Response({"non_field_errors": ["User not found."]}, status=status.HTTP_400_BAD_REQUEST)
             
-        user = mosque_admin.user
-        current_changed = mosque_admin.password_changed_at or mosque_admin.last_password_reset_at or user.date_joined
+        user = profile.user
+        current_changed = profile.password_changed_at or profile.last_password_reset_at or user.date_joined
         current_changed_str = str(current_changed.timestamp() if hasattr(current_changed, "timestamp") else current_changed)
         
         # Verify token has not already been used (single-use validation)
@@ -309,10 +335,10 @@ class ForgotPasswordResetAPIView(APIView):
         user.set_password(new_password)
         user.save()
         
-        mosque_admin.must_change_password = False
-        mosque_admin.temporary_password_expires_at = None
-        mosque_admin.last_password_reset_at = timezone.now()
-        mosque_admin.save()
+        profile.must_change_password = False
+        profile.temporary_password_expires_at = None
+        profile.last_password_reset_at = timezone.now()
+        profile.save()
         
         # Invalidate existing sessions
         Token.objects.filter(user=user).delete()
@@ -325,6 +351,7 @@ class ForgotPasswordResetAPIView(APIView):
         )
         
         return Response({"detail": "Password reset successfully. Please login with your new password."}, status=status.HTTP_200_OK)
+
 
 
 class AccountRecoveryRequestAPIView(APIView):
