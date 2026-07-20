@@ -259,6 +259,7 @@ const MosqueMapInner = memo(function MosqueMapInner({
         mapInstance.touchZoom.enable();
         setShowMobileWarning(false);
         isMobileWarningActive.current = false;
+        if (e.cancelable) e.preventDefault();
       } else {
         mapInstance.dragging.disable();
         mapInstance.touchZoom.disable();
@@ -277,6 +278,8 @@ const MosqueMapInner = memo(function MosqueMapInner({
           setShowMobileWarning(false);
           isMobileWarningActive.current = false;
         }, 1500);
+      } else if (e.touches.length >= 2) {
+        if (e.cancelable) e.preventDefault();
       }
     };
 
@@ -291,9 +294,9 @@ const MosqueMapInner = memo(function MosqueMapInner({
     container.addEventListener("mouseenter", handleMouseEnter);
     container.addEventListener("mouseleave", handleMouseLeave);
     container.addEventListener("wheel", handleWheel, { passive: true });
-    container.addEventListener("touchstart", handleTouchStart, { passive: true });
-    container.addEventListener("touchmove", handleTouchMove, { passive: true });
-    container.addEventListener("touchend", handleTouchEnd, { passive: true });
+    container.addEventListener("touchstart", handleTouchStart, { passive: false });
+    container.addEventListener("touchmove", handleTouchMove, { passive: false });
+    container.addEventListener("touchend", handleTouchEnd, { passive: false });
 
     return () => {
       container.removeEventListener("mouseenter", handleMouseEnter);
