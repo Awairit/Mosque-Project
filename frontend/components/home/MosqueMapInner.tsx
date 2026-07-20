@@ -187,9 +187,8 @@ const MosqueMapInner = memo(function MosqueMapInner({
     const container = containerRef.current;
     if (!container || !mapInstance) return;
 
-    // 1. Initialize default scroll/drag states
+    // 1. Initialize default scroll/drag states (always enabled for map coordinates calculations)
     mapInstance.scrollWheelZoom.disable();
-    // Default to enabled for mouse drag, touch handlers will adjust on touchstart
     mapInstance.dragging.enable();
     mapInstance.touchZoom.enable();
 
@@ -252,22 +251,51 @@ const MosqueMapInner = memo(function MosqueMapInner({
       }
     };
 
-    // 3. Touch Event Handlers (Mobile Two-Finger Panning)
-    const handleTouchStart = (e: TouchEvent) => {
-      if (e.touches.length >= 2) {
-        mapInstance.dragging.enable();
-        mapInstance.touchZoom.enable();
-        setShowMobileWarning(false);
-        isMobileWarningActive.current = false;
-      } else {
-        mapInstance.dragging.disable();
-        mapInstance.touchZoom.disable();
+    // 3. Pointer and Touch Event Handlers (Mobile Two-Finger Panning & Pinch Zoom)
+    const activePointers = new Set<number>();
+
+    const handlePointerDown = (e: PointerEvent) => {
+      if (e.pointerType === "touch") {
+        activePointers.add(e.pointerId);
       }
     };
 
-    const handleTouchMove = (e: TouchEvent) => {
+    const handlePointerMoveCapture = (e: PointerEvent) => {
+      if (e.pointerType === "touch") {
+        if (activePointers.size === 1) {
+          // One finger: stop event propagation to Leaflet to prevent map panning,
+          // allowing the default browser page scroll behavior to run.
+          e.stopPropagation();
+          
+          if (!isMobileWarningActive.current) {
+            isMobileWarningActive.current = true;
+            setShowMobileWarning(true);
+          }
+          if (mobileTimeoutRef.current) clearTimeout(mobileTimeoutRef.current);
+          mobileTimeoutRef.current = setTimeout(() => {
+            setShowMobileWarning(false);
+            isMobileWarningActive.current = false;
+          }, 1500);
+        } else if (activePointers.size >= 2) {
+          // Two or more fingers: allow propagation to Leaflet but prevent default browser zoom/scroll.
+          setShowMobileWarning(false);
+          isMobileWarningActive.current = false;
+          if (e.cancelable) e.preventDefault();
+        }
+      }
+    };
+
+    const handlePointerUpOrCancel = (e: PointerEvent) => {
+      if (e.pointerType === "touch") {
+        activePointers.delete(e.pointerId);
+      }
+    };
+
+    const handleTouchMoveCapture = (e: TouchEvent) => {
       if (e.touches.length === 1) {
-        // Show warning only when user attempts to drag using one finger
+        // One finger: stop event propagation to Leaflet to prevent map panning.
+        e.stopPropagation();
+        
         if (!isMobileWarningActive.current) {
           isMobileWarningActive.current = true;
           setShowMobileWarning(true);
@@ -277,13 +305,11 @@ const MosqueMapInner = memo(function MosqueMapInner({
           setShowMobileWarning(false);
           isMobileWarningActive.current = false;
         }, 1500);
-      }
-    };
-
-    const handleTouchEnd = (e: TouchEvent) => {
-      if (e.touches.length < 2) {
-        mapInstance.dragging.disable();
-        mapInstance.touchZoom.disable();
+      } else if (e.touches.length >= 2) {
+        // Two or more fingers: allow propagation to Leaflet but prevent browser actions.
+        setShowMobileWarning(false);
+        isMobileWarningActive.current = false;
+        if (e.cancelable) e.preventDefault();
       }
     };
 
@@ -291,17 +317,25 @@ const MosqueMapInner = memo(function MosqueMapInner({
     container.addEventListener("mouseenter", handleMouseEnter);
     container.addEventListener("mouseleave", handleMouseLeave);
     container.addEventListener("wheel", handleWheel, { passive: true });
-    container.addEventListener("touchstart", handleTouchStart, { passive: true });
-    container.addEventListener("touchmove", handleTouchMove, { passive: true });
-    container.addEventListener("touchend", handleTouchEnd, { passive: true });
+    
+    // Register capture-phase pointer and touch listeners to intercept events before Leaflet receives them.
+    container.addEventListener("pointerdown", handlePointerDown, { capture: true });
+    container.addEventListener("pointermove", handlePointerMoveCapture, { capture: true, passive: false });
+    container.addEventListener("pointerup", handlePointerUpOrCancel, { capture: true });
+    container.addEventListener("pointercancel", handlePointerUpOrCancel, { capture: true });
+    container.addEventListener("touchmove", handleTouchMoveCapture, { capture: true, passive: false });
 
     return () => {
       container.removeEventListener("mouseenter", handleMouseEnter);
       container.removeEventListener("mouseleave", handleMouseLeave);
       container.removeEventListener("wheel", handleWheel);
-      container.removeEventListener("touchstart", handleTouchStart);
-      container.removeEventListener("touchmove", handleTouchMove);
-      container.removeEventListener("touchend", handleTouchEnd);
+      
+      container.removeEventListener("pointerdown", handlePointerDown, { capture: true });
+      container.removeEventListener("pointermove", handlePointerMoveCapture, { capture: true });
+      container.removeEventListener("pointerup", handlePointerUpOrCancel, { capture: true });
+      container.removeEventListener("pointercancel", handlePointerUpOrCancel, { capture: true });
+      container.removeEventListener("touchmove", handleTouchMoveCapture, { capture: true });
+      
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
@@ -331,6 +365,11 @@ const MosqueMapInner = memo(function MosqueMapInner({
       aria-label="Interactive Mosque Locations Map. Use arrow keys to pan the map, and plus and minus keys to zoom. On desktop, hold Control (or Command on Mac) and scroll to zoom. On mobile, use two fingers to pan."
       className="relative h-[320px] sm:h-[400px] md:h-[480px] w-full overflow-hidden rounded-2xl border border-slate-900/10 shadow-lg focus-within:ring-2 focus-within:ring-emerald-800 focus-within:ring-offset-2 outline-none transition-all duration-200 [&_.leaflet-bar_a]:focus-visible:ring-2 [&_.leaflet-bar_a]:focus-visible:ring-emerald-800 [&_.leaflet-bar_a]:focus-visible:outline-none"
     >
+      <style>{`
+        .leaflet-container {
+          touch-action: pan-y !important;
+        }
+      `}</style>
       {/* Desktop interaction warning overlay */}
       <div
         className={`absolute inset-0 flex items-center justify-center bg-black/35 z-[999] pointer-events-none transition-opacity duration-300 ${

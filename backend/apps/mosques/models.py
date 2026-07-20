@@ -97,14 +97,27 @@ class Mosque(TimeStampedModel):
     def __str__(self) -> str:
         return self.mosque_name
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Track original URL so save() can detect changes.
+        self._original_google_maps_url = self.google_maps_url
+
     def save(self, *args, **kwargs):
-        if (self.latitude is None or self.longitude is None) and self.google_maps_url:
-            from apps.mosques.services import extract_coordinates_from_url
+        from apps.mosques.services import extract_coordinates_from_url
+
+        url_changed = self.google_maps_url != self._original_google_maps_url
+        coords_missing = self.latitude is None or self.longitude is None
+
+        # Re-extract coordinates when:
+        #   (a) URL was newly supplied and coords are missing, OR
+        #   (b) URL changed (re-sync regardless of existing coords).
+        # Never touch coords when the URL is empty or unchanged with valid coords.
+        if self.google_maps_url and (coords_missing or url_changed):
             lat, lon = extract_coordinates_from_url(self.google_maps_url)
             if lat is not None and lon is not None:
                 self.latitude = lat
                 self.longitude = lon
-                
+
         # Dual-write synchronization
         if self.city_relation_id:
             from apps.locations.models import City

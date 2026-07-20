@@ -1,7 +1,7 @@
-"""Django admin registrations for mosque workflows."""
-
 from django.contrib import admin
 from django.contrib.auth.models import User
+from django import forms
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 
@@ -16,8 +16,45 @@ from apps.mosques.models import (
 )
 
 
+class MosqueAdminForm(forms.ModelForm):
+    """Admin form for Mosque that validates Google Maps URL coordinate extraction.
+
+    Prevents saving a mosque that has a Google Maps URL but unresolvable
+    coordinates, which was the root cause of the V1.1 production distance
+    calculation failures.
+    """
+
+    class Meta:
+        model = Mosque
+        fields = "__all__"
+
+    def clean(self):
+        cleaned_data = super().clean()
+        url = cleaned_data.get("google_maps_url") or ""
+        lat = cleaned_data.get("latitude")
+        lon = cleaned_data.get("longitude")
+
+        # Only validate if a URL is supplied AND both lat/lon are absent.
+        # If the admin has manually entered coordinates, trust them.
+        if url and (lat is None or lon is None):
+            from apps.mosques.services import extract_coordinates_from_url
+            extracted_lat, extracted_lon = extract_coordinates_from_url(url)
+            if extracted_lat is None or extracted_lon is None:
+                raise ValidationError(
+                    "Unable to extract coordinates from the supplied Google Maps URL. "
+                    "Please provide a valid Google Maps location URL, or enter the "
+                    "latitude and longitude manually."
+                )
+            # Populate the form fields so they are saved correctly.
+            cleaned_data["latitude"] = extracted_lat
+            cleaned_data["longitude"] = extracted_lon
+
+        return cleaned_data
+
+
 @admin.register(Mosque)
 class MosqueAdmin(admin.ModelAdmin):
+    form = MosqueAdminForm
     autocomplete_fields = ["city_relation"]
     list_display = (
         "mosque_name",

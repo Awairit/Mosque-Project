@@ -517,6 +517,13 @@ class CityAdminAnnouncementViewSet(viewsets.ModelViewSet):
             created_by=self.request.user
         )
 
+    def perform_update(self, serializer):
+        city_admin = self.request.user.city_admin
+        mosque = serializer.validated_data.get("mosque")
+        if mosque and mosque.city_relation != city_admin.city:
+            raise ValidationError("You can only assign announcements to mosques in your city.")
+        serializer.save()
+
 
 class CityAdminEventViewSet(viewsets.ModelViewSet):
     permission_classes = [IsCityAdmin]
@@ -536,6 +543,13 @@ class CityAdminEventViewSet(viewsets.ModelViewSet):
             created_by=self.request.user
         )
 
+    def perform_update(self, serializer):
+        city_admin = self.request.user.city_admin
+        mosque = serializer.validated_data.get("mosque")
+        if mosque and mosque.city_relation != city_admin.city:
+            raise ValidationError("You can only assign events to mosques in your city.")
+        serializer.save()
+
 
 class CityAdminNotificationSendAPIView(APIView):
     permission_classes = [IsCityAdmin]
@@ -551,6 +565,102 @@ class CityAdminNotificationSendAPIView(APIView):
 
         if not channel or not recipient or not message:
             raise ValidationError("Fields 'channel', 'recipient', and 'message' are required.")
+
+        # Recipient Authorization Checks to prevent cross-city spam or arbitrary relays
+        from rest_framework.exceptions import PermissionDenied
+        from django.db.models import Q
+        from apps.common.utils.strings import normalize_phone_number
+        from apps.accounts.models import MosqueAdmin, CityAdmin
+
+        city = city_admin.city
+        is_authorized = False
+
+        if channel in ["sms", "whatsapp"]:
+            try:
+                normalized = normalize_phone_number(recipient)
+            except ValueError:
+                normalized = recipient
+            local_digits = normalized.replace("+91", "")
+            
+            if MosqueAdmin.objects.filter(
+                Q(mobile_number=normalized) | Q(mobile_number=local_digits),
+                mosque__city_relation=city
+            ).exists():
+                is_authorized = True
+            elif CityAdmin.objects.filter(
+                Q(mobile_number=normalized) | Q(mobile_number=local_digits),
+                city=city
+            ).exists():
+                is_authorized = True
+
+        elif channel == "email":
+            if MosqueAdmin.objects.filter(
+                user__email=recipient,
+                mosque__city_relation=city
+            ).exists():
+                is_authorized = True
+            elif CityAdmin.objects.filter(
+                user__email=recipient,
+                city=city
+            ).exists():
+                is_authorized = True
+
+        elif channel == "in_app":
+            try:
+                user_id = int(recipient)
+                if MosqueAdmin.objects.filter(
+                    user_id=user_id,
+                    mosque__city_relation=city
+                ).exists():
+                    is_authorized = True
+                elif CityAdmin.objects.filter(
+                    user_id=user_id,
+                    city=city
+                ).exists():
+                    is_authorized = True
+            except ValueError:
+                raise ValidationError("Recipient for in_app must be a numeric user ID.")
+
+        elif channel == "push":
+            # For push, check if recipient user is within the city admin's city boundaries
+            # Check user_id in metadata
+            user_id = metadata.get("user_id")
+            if user_id:
+                try:
+                    user_id = int(user_id)
+                    if MosqueAdmin.objects.filter(user_id=user_id, mosque__city_relation=city).exists() or \
+                       CityAdmin.objects.filter(user_id=user_id, city=city).exists():
+                        is_authorized = True
+                except ValueError:
+                    pass
+
+            if not is_authorized:
+                # Try as user ID
+                try:
+                    u_id = int(recipient)
+                    if MosqueAdmin.objects.filter(user_id=u_id, mosque__city_relation=city).exists() or \
+                       CityAdmin.objects.filter(user_id=u_id, city=city).exists():
+                        is_authorized = True
+                except ValueError:
+                    pass
+            # Try as email
+            if not is_authorized:
+                if MosqueAdmin.objects.filter(user__email=recipient, mosque__city_relation=city).exists() or \
+                   CityAdmin.objects.filter(user__email=recipient, city=city).exists():
+                    is_authorized = True
+            # Try as phone
+            if not is_authorized:
+                try:
+                    normalized = normalize_phone_number(recipient)
+                except ValueError:
+                    normalized = recipient
+                local_digits = normalized.replace("+91", "")
+                if MosqueAdmin.objects.filter(Q(mobile_number=normalized) | Q(mobile_number=local_digits), mosque__city_relation=city).exists() or \
+                   CityAdmin.objects.filter(Q(mobile_number=normalized) | Q(mobile_number=local_digits), city=city).exists():
+                    is_authorized = True
+
+        if not is_authorized:
+            raise PermissionDenied("You are not authorized to send notifications to this recipient.")
 
         success = False
         if channel == "whatsapp":
@@ -574,6 +684,7 @@ class CityAdminNotificationSendAPIView(APIView):
             "success": success,
             "message": "Notification dispatched." if success else "Failed to dispatch notification."
         }, status=status.HTTP_200_OK if success else status.HTTP_400_BAD_REQUEST)
+
 
 
 class PublicAnnouncementListAPIView(ListAPIView):
