@@ -171,14 +171,14 @@ class CityAdminFlowTests(APITestCase):
         self.assertEqual(response.data["events"]["total"], 1)
         self.assertEqual(response.data["events"]["upcoming"], 1)
 
-    def test_notification_job_enqueued_on_publish(self):
+    def test_notification_job_not_triggered_synchronously_on_model_save(self):
+        """BUG-001 Invariant: Model save must not execute synchronous notification side effects."""
         from apps.mosques.models import NotificationJob
         initial_count = NotificationJob.objects.count()
 
-        # Create general published announcement
         today = timezone.now().date()
         from datetime import timedelta
-        MosqueAnnouncement.objects.create(
+        announcement = MosqueAnnouncement.objects.create(
             city=self.mumbai,
             title="Safar Timing Notice",
             content="Details about timings change",
@@ -187,9 +187,71 @@ class CityAdminFlowTests(APITestCase):
             end_date=today + timedelta(days=5)
         )
 
-        # A notification job should be enqueued
-        self.assertEqual(NotificationJob.objects.count(), initial_count + 1)
-        job = NotificationJob.objects.order_by("-created_at").first()
-        self.assertEqual(job.title, "Safar Timing Notice")
-        self.assertEqual(job.channel, "whatsapp")
-        self.assertEqual(job.status, NotificationJob.Status.SENT) # Since DummyProvider returns True
+        # Zero synchronous notification jobs created in post_save
+        self.assertEqual(NotificationJob.objects.count(), initial_count)
+        self.assertIsNotNone(announcement.id)
+
+    def test_city_admin_can_list_city_mosques(self):
+        # Create a mosque in Pune
+        Mosque.objects.create(
+            mosque_name="Pune Jama Masjid",
+            city="Pune",
+            city_relation=self.pune,
+            latitude=18.5204,
+            longitude=73.8567,
+            mosque_status=Mosque.MosqueStatus.ACTIVE
+        )
+
+        # Mumbai City Admin lists city mosques
+        self.client.force_authenticate(user=self.city_admin_user)
+        url = reverse("city-admin-mosques-list")
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data.get("results", response.data)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["mosque_name"], "Mumbai Masjid")
+
+    def test_city_admin_dashboard_stats_query_efficiency(self):
+        """Test BUG-007: City Admin stats API returns exact metrics within 4 SQL queries."""
+        self.client.force_authenticate(user=self.city_admin_user)
+        stats_url = reverse("city-admin-dashboard-stats")
+
+        # Create test announcements and events
+        today = timezone.localdate()
+        MosqueAnnouncement.objects.create(
+            city=self.mumbai,
+            title="Published Alert",
+            content="Content",
+            status="published",
+            start_date=today,
+            end_date=today,
+            announcement_type="emergency"
+        )
+        MosqueAnnouncement.objects.create(
+            city=self.mumbai,
+            title="Draft Alert",
+            content="Content",
+            status="draft",
+            start_date=today,
+            end_date=today
+        )
+        MosqueEvent.objects.create(
+            city=self.mumbai,
+            title="Upcoming Gathering",
+            event_date=today + timezone.timedelta(days=2),
+            event_time=timezone.now().time(),
+            status="published"
+        )
+
+        with self.assertNumQueries(4):
+            res = self.client.get(stats_url)
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["announcements"]["total"], 2)
+        self.assertEqual(res.data["announcements"]["published"], 1)
+        self.assertEqual(res.data["announcements"]["draft"], 1)
+        self.assertEqual(res.data["events"]["total"], 1)
+        self.assertEqual(res.data["events"]["upcoming"], 1)
+        self.assertEqual(res.data["emergency_alerts"], 1)
+
+

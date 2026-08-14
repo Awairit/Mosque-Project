@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import date, time, datetime, timedelta
 
+
 @dataclass
 class ResolvedPrayerTiming:
     fajr_time: time
@@ -13,6 +14,8 @@ class ResolvedPrayerTiming:
     jumuah_time: time
     effective_from: date
     maghrib_congregation_mode: str
+    maghrib_delay_minutes: int = 15
+
 
 def ensure_time(t) -> time:
     """Helper to convert string time representation to datetime.time if necessary."""
@@ -26,33 +29,28 @@ def ensure_time(t) -> time:
                 pass
     raise ValueError(f"Could not convert {t} to datetime.time")
 
+
 def add_minutes_to_time(t, minutes: int) -> time:
     """Safely adds minutes to a datetime.time or string time object, handling rollovers."""
     t_obj = ensure_time(t)
-    total_minutes = t_obj.hour * 60 + t_obj.minute + minutes
-    # Handle rollover (wrap around 24 hours)
-    total_minutes = total_minutes % (24 * 60)
-    new_hour = total_minutes // 60
-    new_minute = total_minutes % 60
-    return time(new_hour, new_minute, t_obj.second)
+    dt = datetime.combine(date.today(), t_obj) + timedelta(minutes=minutes)
+    return dt.time()
 
-class CongregationTimingResolver:
+
+class PrayerTimingService:
+    """Encapsulates prayer timing resolution business logic."""
+
     @staticmethod
-    def resolve_prayer_timing(timing, date_val: date) -> ResolvedPrayerTiming | None:
-        """Resolves the effective congregation timings for a PrayerTiming record on a specific date.
-        
-        If Maghrib is set to CITY_OFFSET, reads the Maghrib start time from the citywide daily timetable
-        and offsets it. Otherwise, returns the manually configured static values.
-        """
-        if not timing:
-            return None
+    def resolve_timing(timing, date_val: date = None) -> ResolvedPrayerTiming:
+        if date_val is None:
+            date_val = date.today()
 
-        # Build a state key representing the inputs that affect the resolution.
-        # If any of these inputs change (e.g. during a test case mutation), the cache invalidates.
         city = timing.mosque.city_relation if timing.mosque else None
+        delay_mins = getattr(timing, "maghrib_delay_minutes", 15) or 15
         state_key = (
             timing.maghrib_congregation_mode,
             timing.maghrib_time,
+            delay_mins,
             city.maghrib_auto_congregation_enabled if city else None,
             city.maghrib_congregation_offset if city else None,
         )
@@ -65,22 +63,17 @@ class CongregationTimingResolver:
 
         # Start with static values from the database
         resolved_maghrib = ensure_time(timing.maghrib_time)
-        
-        # Check if city-level auto calculation is active for this mosque
+
+        # Check if city-level / offset calculation is active for this mosque
         from apps.prayers.models import PrayerTiming
         if timing.maghrib_congregation_mode == PrayerTiming.CongregationMode.CITY_OFFSET:
             if city and city.maghrib_auto_congregation_enabled:
-                # Part C: Check if we have prefetch list from today's query
                 daily_timing = None
                 today_timings = getattr(city, "today_daily_timing", None)
                 if today_timings is not None:
-                    # Due to uniqueness constraint on (city, date), we can use the first item directly
-                    # if the date matches.
                     if len(today_timings) > 0 and today_timings[0].date == date_val:
                         daily_timing = today_timings[0]
-                
-                # Fallback to direct DB lookup if not prefetched (details view, dashboard, tests)
-                # This guarantees immediate freshness without process restart.
+
                 if daily_timing is None:
                     from apps.locations.models import CityDailyPrayerTiming
                     daily_timing = CityDailyPrayerTiming.objects.filter(
@@ -89,11 +82,18 @@ class CongregationTimingResolver:
                     ).first()
 
                 if daily_timing:
+                    # If mosque has explicitly configured delay (differs from default 15) or city offset is set
+                    if delay_mins != 15:
+                        offset_to_use = delay_mins
+                    elif city and city.maghrib_congregation_offset is not None:
+                        offset_to_use = city.maghrib_congregation_offset
+                    else:
+                        offset_to_use = delay_mins
+
                     resolved_maghrib = add_minutes_to_time(
                         daily_timing.maghrib_time,
-                        city.maghrib_congregation_offset
+                        offset_to_use
                     )
-
 
         resolved = ResolvedPrayerTiming(
             fajr_time=ensure_time(timing.fajr_time),
@@ -104,9 +104,18 @@ class CongregationTimingResolver:
             jumuah_time=ensure_time(timing.jumuah_time),
             effective_from=timing.effective_from,
             maghrib_congregation_mode=timing.maghrib_congregation_mode,
+            maghrib_delay_minutes=delay_mins,
         )
-        
+
         setattr(timing, cache_key, (resolved, state_key))
         return resolved
 
 
+class CongregationTimingResolver:
+    """Backwards-compatibility resolver alias for PrayerTimingService."""
+
+    @staticmethod
+    def resolve_prayer_timing(timing, date_val: date = None) -> ResolvedPrayerTiming | None:
+        if not timing:
+            return None
+        return PrayerTimingService.resolve_timing(timing, date_val)

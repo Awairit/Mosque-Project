@@ -103,6 +103,19 @@ class MosqueListAPIView(ListAPIView):
     def get_queryset(self):
         queryset = get_optimized_mosque_queryset(prefetch_details=False)
 
+        # City Filters
+        city_param = self.request.query_params.get("city")
+        if city_param and city_param.strip():
+            c_name = city_param.strip()
+            queryset = queryset.filter(Q(city__iexact=c_name) | Q(city_relation__name__iexact=c_name))
+
+        city_id_param = self.request.query_params.get("city_id")
+        if city_id_param:
+            try:
+                queryset = queryset.filter(city_relation_id=int(city_id_param))
+            except ValueError:
+                pass
+
         # Viewport Bounding Box Filter
         bbox = self.request.query_params.get("in_bbox")
         if bbox:
@@ -147,7 +160,7 @@ class MosqueListAPIView(ListAPIView):
                 pass
 
         if user_lat is not None and user_lon is not None and not in_bbox:
-            # Proximity pre-filtering for Top 5 list fallback (100 km radius)
+            # Proximity pre-filtering for nearest list (100 km radius)
             radius_km = 100.0
             lat_delta = radius_km / 111.1
             min_lat = user_lat - lat_delta
@@ -160,35 +173,46 @@ class MosqueListAPIView(ListAPIView):
 
             candidates = queryset.filter(
                 latitude__range=(min_lat, max_lat),
-                longitude__range=(min_lon, max_lon),
+                longitude__range=(min_lon, max_lon)
             )
             if candidates.count() < 5:
                 candidates = queryset
         else:
             candidates = queryset
 
-        # Compute dynamic filters and distances
-        filtered_candidates = []
-        for m in candidates:
-            if open_now:
-                from apps.mosques.services import MosqueAvailabilityEngine
-                engine = MosqueAvailabilityEngine(m)
-                avail = engine.get_availability()
-                if not avail.get("is_open"):
-                    continue
+        # 1. Compute Haversine distance strictly using actual mosque coordinates (Invariant 2 & 3)
+        candidate_list = list(candidates)
+        for m in candidate_list:
+            m_lat = float(m.latitude) if m.latitude is not None else None
+            m_lon = float(m.longitude) if m.longitude is not None else None
 
-            if user_lat is not None and user_lon is not None and m.latitude is not None and m.longitude is not None:
-                m.distance_val = calculate_haversine(user_lat, user_lon, m.latitude, m.longitude)
+            if user_lat is not None and user_lon is not None and m_lat is not None and m_lon is not None:
+                m.distance_val = calculate_haversine(user_lat, user_lon, m_lat, m_lon)
             else:
                 m.distance_val = None
 
-            filtered_candidates.append(m)
-
-        # Distance sorting and Top 5 slicing
+        # 2. Sort nearest-first by real distance if user location is provided
         if user_lat is not None and user_lon is not None:
-            filtered_candidates.sort(key=lambda x: x.distance_val if x.distance_val is not None else float('inf'))
-            if not in_bbox:
-                filtered_candidates = filtered_candidates[:5]
+            candidate_list.sort(key=lambda x: x.distance_val if x.distance_val is not None else float('inf'))
+
+        # 3. Apply open_now filter and top-5/bbox slicing efficiently
+        target_limit = None if in_bbox else 5
+        filtered_candidates = []
+
+        if open_now:
+            from apps.mosques.services import MosqueAvailabilityEngine
+            for m in candidate_list:
+                engine = MosqueAvailabilityEngine(m)
+                avail = engine.get_availability()
+                if avail.get("is_open"):
+                    filtered_candidates.append(m)
+                    if target_limit and len(filtered_candidates) >= target_limit:
+                        break
+        else:
+            if target_limit:
+                filtered_candidates = candidate_list[:target_limit]
+            else:
+                filtered_candidates = candidate_list
 
         serializer = self.get_serializer(
             filtered_candidates,
@@ -391,6 +415,9 @@ class DashboardMosqueProfileAPIView(APIView):
         serializer.save()
         return Response(serializer.data)
 
+    def patch(self, request):
+        return self.put(request)
+
 
 class DashboardOperatingScheduleAPIView(APIView):
     """Endpoints for authenticated mosque admins to manage their operating schedule."""
@@ -505,7 +532,7 @@ class CityAdminAnnouncementViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         city_admin = self.request.user.city_admin
-        return MosqueAnnouncement.objects.filter(city=city_admin.city)
+        return MosqueAnnouncement.objects.filter(city=city_admin.city, mosque__isnull=True)
 
     def perform_create(self, serializer):
         city_admin = self.request.user.city_admin
@@ -514,6 +541,7 @@ class CityAdminAnnouncementViewSet(viewsets.ModelViewSet):
             raise ValidationError("You can only assign announcements to mosques in your city.")
         serializer.save(
             city=city_admin.city,
+            mosque=None,
             created_by=self.request.user
         )
 
@@ -522,7 +550,10 @@ class CityAdminAnnouncementViewSet(viewsets.ModelViewSet):
         mosque = serializer.validated_data.get("mosque")
         if mosque and mosque.city_relation != city_admin.city:
             raise ValidationError("You can only assign announcements to mosques in your city.")
-        serializer.save()
+        serializer.save(
+            city=city_admin.city,
+            mosque=None
+        )
 
 
 class CityAdminEventViewSet(viewsets.ModelViewSet):
@@ -531,7 +562,7 @@ class CityAdminEventViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         city_admin = self.request.user.city_admin
-        return MosqueEvent.objects.filter(city=city_admin.city)
+        return MosqueEvent.objects.filter(city=city_admin.city, mosque__isnull=True)
 
     def perform_create(self, serializer):
         city_admin = self.request.user.city_admin
@@ -540,6 +571,7 @@ class CityAdminEventViewSet(viewsets.ModelViewSet):
             raise ValidationError("You can only assign events to mosques in your city.")
         serializer.save(
             city=city_admin.city,
+            mosque=None,
             created_by=self.request.user
         )
 
@@ -548,11 +580,94 @@ class CityAdminEventViewSet(viewsets.ModelViewSet):
         mosque = serializer.validated_data.get("mosque")
         if mosque and mosque.city_relation != city_admin.city:
             raise ValidationError("You can only assign events to mosques in your city.")
-        serializer.save()
+        serializer.save(
+            city=city_admin.city,
+            mosque=None
+        )
+
+
+class CityAdminMosqueListAPIView(ListAPIView):
+    """
+    Lists all mosques located in the assigned City Admin's city.
+    Requires IsCityAdmin permission.
+    """
+    permission_classes = [IsCityAdmin]
+    serializer_class = MosqueListSerializer
+
+    def get_queryset(self):
+        city_admin = self.request.user.city_admin
+        city = city_admin.city
+        from django.db.models import Q
+        return Mosque.objects.filter(
+            Q(city_relation=city) | Q(city__iexact=city.name)
+        ).select_related("city_relation").order_by("mosque_name")
+
+
+class CityAdminMosqueStatusAPIView(APIView):
+    """
+    Allows a City Admin to update status (active, inactive, archived) for a mosque in their assigned city.
+    Enforces backend city scoping.
+    """
+    permission_classes = [IsCityAdmin]
+
+    def patch(self, request, pk):
+        city_admin = request.user.city_admin
+        from django.db.models import Q
+        try:
+            mosque = Mosque.objects.get(
+                Q(pk=pk) & (Q(city_relation=city_admin.city) | Q(city__iexact=city_admin.city.name))
+            )
+        except Mosque.DoesNotExist:
+            return Response({"detail": "Mosque not found or does not belong to your assigned city."}, status=status.HTTP_404_NOT_FOUND)
+
+        new_status = request.data.get("mosque_status")
+        if new_status not in [Mosque.MosqueStatus.ACTIVE, Mosque.MosqueStatus.INACTIVE, Mosque.MosqueStatus.ARCHIVED]:
+            return Response({"detail": "Invalid mosque status. Must be 'active', 'inactive', or 'archived'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        old_status = mosque.mosque_status
+        mosque.mosque_status = new_status
+        mosque.save(update_fields=["mosque_status", "updated_at"])
+
+        from apps.accounts.models import MosqueAdmin, IdentityAuditLog
+        if new_status in [Mosque.MosqueStatus.INACTIVE, Mosque.MosqueStatus.ARCHIVED]:
+            admins = MosqueAdmin.objects.filter(mosque=mosque)
+            for admin in admins:
+                admin.is_active = False
+                admin.user.is_active = False
+                admin.user.save(update_fields=["is_active"])
+                admin.save(update_fields=["is_active", "updated_at"])
+        elif new_status == Mosque.MosqueStatus.ACTIVE:
+            admins = MosqueAdmin.objects.filter(mosque=mosque)
+            for admin in admins:
+                admin.is_active = True
+                admin.user.is_active = True
+                admin.user.save(update_fields=["is_active"])
+                admin.save(update_fields=["is_active", "updated_at"])
+
+        IdentityAuditLog.objects.create(
+            user=request.user,
+            action=IdentityAuditLog.Action.MOSQUE_STATUS_CHANGED,
+            metadata={
+                "mosque_id": mosque.id,
+                "mosque_name": mosque.mosque_name,
+                "old_status": old_status,
+                "new_status": new_status,
+                "changed_by": request.user.username,
+                "role": "city_admin",
+            }
+        )
+
+        return Response({
+            "detail": f"Mosque status updated to {new_status}.",
+            "id": mosque.id,
+            "mosque_status": mosque.mosque_status
+        }, status=status.HTTP_200_OK)
+
 
 
 class CityAdminNotificationSendAPIView(APIView):
     permission_classes = [IsCityAdmin]
+
 
     def post(self, request, *args, **kwargs):
         city_admin = request.user.city_admin
@@ -694,19 +809,28 @@ class PublicAnnouncementListAPIView(ListAPIView):
 
     def get_queryset(self):
         today = timezone.localdate()
-        queryset = MosqueAnnouncement.objects.filter(
+        from django.db.models import Q
+        queryset = MosqueAnnouncement.objects.select_related(
+            "created_by", "city", "created_by__city_admin"
+        ).filter(
             is_active=True,
             status="published",
             start_date__lte=today,
             end_date__gte=today
         )
-        city_id = self.request.query_params.get("city_id")
-        if city_id:
-            queryset = queryset.filter(city_id=city_id)
         mosque_id = self.request.query_params.get("mosque_id")
+        city_id = self.request.query_params.get("city_id")
+        city_name = self.request.query_params.get("city")
+
         if mosque_id:
             queryset = queryset.filter(mosque_id=mosque_id)
+        elif city_id:
+            queryset = queryset.filter(city_id=city_id, mosque__isnull=True)
+        elif city_name:
+            queryset = queryset.filter(city__name__iexact=city_name, mosque__isnull=True)
+
         return queryset.order_by("-priority", "-created_at")
+
 
 
 class PublicEventListAPIView(ListAPIView):
@@ -715,18 +839,30 @@ class PublicEventListAPIView(ListAPIView):
     pagination_class = None
 
     def get_queryset(self):
-        today = timezone.localdate()
-        queryset = MosqueEvent.objects.filter(
+        from django.db.models import Q
+        from zoneinfo import ZoneInfo
+        now = timezone.now().astimezone(ZoneInfo("Asia/Kolkata"))
+        today = now.date()
+        current_time = now.time()
+
+        queryset = MosqueEvent.objects.select_related(
+            "created_by", "city", "created_by__city_admin"
+        ).filter(
             is_active=True,
             status="published",
-            event_date__gte=today
+        ).filter(
+            Q(event_date__gt=today) |
+            Q(event_date=today, end_time__gte=current_time) |
+            Q(event_date=today, end_time__isnull=True, event_time__gte=current_time)
         )
-        city_id = self.request.query_params.get("city_id")
-        if city_id:
-            queryset = queryset.filter(city_id=city_id)
         mosque_id = self.request.query_params.get("mosque_id")
+        city_id = self.request.query_params.get("city_id")
+
         if mosque_id:
             queryset = queryset.filter(mosque_id=mosque_id)
+        elif city_id:
+            queryset = queryset.filter(city_id=city_id, mosque__isnull=True)
+
         return queryset.order_by("event_date", "event_time")
 
 
@@ -734,37 +870,35 @@ class CityAdminDashboardStatsAPIView(APIView):
     permission_classes = [IsCityAdmin]
 
     def get(self, request):
+        from django.db.models import Count, Q
         city_admin = request.user.city_admin
         city = city_admin.city
         today = timezone.localdate()
         now = timezone.now()
 
-        # Announcements stats
+        # Announcements stats (Single-pass database aggregation)
         announcements_qs = MosqueAnnouncement.objects.filter(city=city)
-        total_announcements = announcements_qs.count()
-        published_announcements = announcements_qs.filter(status="published", start_date__lte=today, end_date__gte=today).count()
-        draft_announcements = announcements_qs.filter(status="draft").count()
-        scheduled_announcements = announcements_qs.filter(status="published", start_date__gt=today).count()
-        expired_announcements = announcements_qs.filter(end_date__lt=today).count()
+        ann_stats = announcements_qs.aggregate(
+            total=Count("id"),
+            published=Count("id", filter=Q(status="published", start_date__lte=today, end_date__gte=today)),
+            draft=Count("id", filter=Q(status="draft")),
+            scheduled=Count("id", filter=Q(status="published", start_date__gt=today)),
+            expired=Count("id", filter=Q(end_date__lt=today)),
+            emergency=Count("id", filter=Q(announcement_type="emergency", status="published", start_date__lte=today, end_date__gte=today)),
+        )
 
-        # Events stats
+        # Events stats (Single-pass database aggregation)
         events_qs = MosqueEvent.objects.filter(city=city)
-        total_events = events_qs.count()
-        upcoming_events = events_qs.filter(event_date__gt=today).count()
-        ongoing_events = events_qs.filter(event_date=today).count()
-        completed_events = events_qs.filter(event_date__lt=today).count()
-
-        # Emergency alerts count
-        emergency_alerts = announcements_qs.filter(
-            announcement_type="emergency",
-            status="published",
-            start_date__lte=today,
-            end_date__gte=today
-        ).count()
+        evt_stats = events_qs.aggregate(
+            total=Count("id"),
+            upcoming=Count("id", filter=Q(event_date__gt=today)),
+            ongoing=Count("id", filter=Q(event_date=today)),
+            completed=Count("id", filter=Q(event_date__lt=today)),
+        )
 
         # Recent activities
-        recent_announcements = announcements_qs.order_by("-created_at")[:5]
-        recent_events = events_qs.order_by("-created_at")[:5]
+        recent_announcements = announcements_qs.only("id", "title", "created_at").order_by("-created_at")[:5]
+        recent_events = events_qs.only("id", "title", "created_at", "event_date").order_by("-created_at")[:5]
 
         recent_activity = []
         for ann in recent_announcements:
@@ -807,19 +941,19 @@ class CityAdminDashboardStatsAPIView(APIView):
 
         return Response({
             "announcements": {
-                "total": total_announcements,
-                "published": published_announcements,
-                "draft": draft_announcements,
-                "scheduled": scheduled_announcements,
-                "expired": expired_announcements
+                "total": ann_stats["total"] or 0,
+                "published": ann_stats["published"] or 0,
+                "draft": ann_stats["draft"] or 0,
+                "scheduled": ann_stats["scheduled"] or 0,
+                "expired": ann_stats["expired"] or 0,
             },
             "events": {
-                "total": total_events,
-                "upcoming": upcoming_events,
-                "ongoing": ongoing_events,
-                "completed": completed_events
+                "total": evt_stats["total"] or 0,
+                "upcoming": evt_stats["upcoming"] or 0,
+                "ongoing": evt_stats["ongoing"] or 0,
+                "completed": evt_stats["completed"] or 0,
             },
-            "emergency_alerts": emergency_alerts,
+            "emergency_alerts": ann_stats["emergency"] or 0,
             "recent_activity": recent_activity
         }, status=status.HTTP_200_OK)
 

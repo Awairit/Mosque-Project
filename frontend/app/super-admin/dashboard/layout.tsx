@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useEffect, useState } from "react";
+import { apiRequest } from "@/lib/api/client";
 
 type LayoutProps = {
   children: ReactNode;
@@ -44,11 +45,29 @@ const navigationItems: NavItem[] = [
     ),
   },
   {
+    label: "City Admins",
+    href: "/super-admin/dashboard/city-admins",
+    icon: (className) => (
+      <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+      </svg>
+    ),
+  },
+  {
     label: "Timetables",
     href: "/super-admin/dashboard/timetables",
     icon: (className) => (
       <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+      </svg>
+    ),
+  },
+  {
+    label: "Account Recovery",
+    href: "/super-admin/dashboard/account-recovery",
+    icon: (className) => (
+      <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
       </svg>
     ),
   },
@@ -64,28 +83,70 @@ const navigationItems: NavItem[] = [
   },
 ];
 
+
 export default function SuperAdminLayout({ children }: LayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [adminUser, setAdminUser] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [pendingRecoveryCount, setPendingRecoveryCount] = useState(0);
+  const [pendingMosquesCount, setPendingMosquesCount] = useState(0);
 
   useEffect(() => {
-    const token = localStorage.getItem("super_auth_token");
-    const user = localStorage.getItem("super_username");
+    const superToken = localStorage.getItem("super_auth_token");
+    const token = superToken || localStorage.getItem("auth_token");
+    const user = localStorage.getItem("super_username") || "Super Admin";
+    const role = localStorage.getItem("user_role");
 
-    if (!token || !user) {
+    if (!token) {
       router.push("/super-admin/login");
-    } else {
-      setIsAuthenticated(true);
-      setAdminUser(user);
+      return;
     }
+
+    if (role && role !== "super_admin") {
+      if (role === "city_admin") {
+        router.push("/city-admin/dashboard");
+      } else if (role === "mosque_admin") {
+        router.push("/dashboard");
+      } else {
+        router.push("/super-admin/login");
+      }
+      return;
+    }
+
+    setIsAuthenticated(true);
+    setAdminUser(user);
   }, [router]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const fetchPendingCounts = async () => {
+      try {
+        const [recoveryRes, mosquesRes] = await Promise.all([
+          apiRequest<{ pending_count: number }>({
+            path: "/platform/account-recovery/?status=pending",
+          }),
+          apiRequest<{ count: number }>({
+            path: "/platform/requests/?status=pending",
+          }),
+        ]);
+        setPendingRecoveryCount(recoveryRes.pending_count || 0);
+        setPendingMosquesCount(mosquesRes.count || 0);
+      } catch (err) {
+        // Ignore error if unauthenticated
+      }
+    };
+    fetchPendingCounts();
+  }, [isAuthenticated, pathname]);
+
 
   const handleSignOut = () => {
     localStorage.removeItem("super_auth_token");
+    localStorage.removeItem("auth_token");
     localStorage.removeItem("super_username");
+    localStorage.removeItem("user_role");
+    localStorage.removeItem("user_roles");
     router.push("/super-admin/login");
   };
 
@@ -101,18 +162,23 @@ export default function SuperAdminLayout({ children }: LayoutProps) {
       mosques: "Mosque Approvals",
       cities: "City Management",
       timetables: "Timetables",
+      "city-admins": "City Admins",
+      "account-recovery": "Account Recovery",
       settings: "System Settings",
     };
 
-    return segments.map((segment, index) => {
-      const href = prefix + "/" + segments.slice(0, index + 1).join("/");
-      const label = labelMap[segment.toLowerCase()] || segment
-        .replace(/-/g, " ")
-        .replace(/\b\w/g, (c) => c.toUpperCase());
-      const isLast = index === segments.length - 1;
+    const breadcrumbs = [];
+    let currentPath = prefix;
 
-      return { label, href, isLast };
-    });
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      currentPath += `/${seg}`;
+      const label = labelMap[seg] || seg.charAt(0).toUpperCase() + seg.slice(1);
+      const isLast = i === segments.length - 1;
+      breadcrumbs.push({ label, href: currentPath, isLast });
+    }
+
+    return breadcrumbs;
   };
 
   if (!isAuthenticated) {
@@ -160,6 +226,8 @@ export default function SuperAdminLayout({ children }: LayoutProps) {
         <nav className="mt-8 flex-grow space-y-1.5">
           {navigationItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+            const isAccountRecovery = item.href === "/super-admin/dashboard/account-recovery";
+            const isMosqueApprovals = item.href === "/super-admin/dashboard/mosques";
             return (
               <Link
                 key={item.href}
@@ -172,7 +240,17 @@ export default function SuperAdminLayout({ children }: LayoutProps) {
                 }`}
               >
                 {item.icon(`h-5 w-5 ${isActive ? "text-emerald-700 dark:text-emerald-500" : "text-slate-400"}`)}
-                {item.label}
+                <span className="flex-1 truncate">{item.label}</span>
+                {isMosqueApprovals && pendingMosquesCount > 0 && (
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 text-[11px] font-bold text-white shadow-sm">
+                    {pendingMosquesCount}
+                  </span>
+                )}
+                {isAccountRecovery && pendingRecoveryCount > 0 && (
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 text-[11px] font-bold text-white shadow-sm">
+                    {pendingRecoveryCount}
+                  </span>
+                )}
               </Link>
             );
           })}

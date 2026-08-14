@@ -8,8 +8,8 @@ responsible for:
     OTPProvider.
 
 The OTPProvider is selected via the OTP_PROVIDER environment variable:
-  OTP_PROVIDER=dummy   → DummyOTPProvider (local development)
-  OTP_PROVIDER=twilio  → TwilioVerifyProvider (production)
+  OTP_PROVIDER=development → DevelopmentOTPProvider (local development)
+  OTP_PROVIDER=twilio      → TwilioVerifyProvider (production)
 
 Business logic in views/serializers must call only OTPService.  No view
 should import from otp_providers directly.

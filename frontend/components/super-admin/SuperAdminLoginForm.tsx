@@ -107,7 +107,15 @@ export function SuperAdminLoginForm() {
 
       // Save token and metadata separately under super admin keys
       localStorage.setItem("super_auth_token", response.token);
+      localStorage.setItem("auth_token", response.token);
       localStorage.setItem("super_username", response.username);
+      localStorage.setItem("user_role", "super_admin");
+      localStorage.setItem("user_roles", JSON.stringify(["super_admin"]));
+      localStorage.removeItem("admin_mobile");
+      localStorage.removeItem("admin_mosque_id");
+      localStorage.removeItem("admin_mosque_name");
+      localStorage.removeItem("city_admin_city_id");
+      localStorage.removeItem("city_admin_city_name");
 
       router.push("/super-admin/dashboard");
     } catch (error) {

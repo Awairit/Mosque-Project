@@ -10,14 +10,16 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         now = timezone.now()
-        active_notices = JanazahNotice.objects.filter(
+        active_notices = JanazahNotice.objects.select_related(
+            "mosque__city_relation"
+        ).filter(
             status__in=[
                 JanazahNotice.StatusChoices.PUBLISHED,
-                JanazahNotice.StatusChoices.COMPLETED
+                JanazahNotice.StatusChoices.COMPLETED,
             ]
         )
 
-        archived_count = 0
+        to_archive_ids = []
         for notice in active_notices:
             # Determine mosque timezone
             tz_str = "UTC"
@@ -31,17 +33,20 @@ class Command(BaseCommand):
                 combined_dt = datetime.combine(notice.burial_date, b_time).replace(tzinfo=tz)
                 # Archive if burial occurred > 24 hours ago
                 if now - combined_dt > timedelta(hours=24):
-                    notice.status = JanazahNotice.StatusChoices.ARCHIVED
-                    notice.save(update_fields=["status", "archived_at"])
-                    archived_count += 1
+                    to_archive_ids.append(notice.id)
             else:
                 # Check based on salah_date
                 s_time = notice.salah_time or time(12, 0)
                 combined_dt = datetime.combine(notice.salah_date, s_time).replace(tzinfo=tz)
                 # Archive if salah occurred > 48 hours ago
                 if now - combined_dt > timedelta(hours=48):
-                    notice.status = JanazahNotice.StatusChoices.ARCHIVED
-                    notice.save(update_fields=["status", "archived_at"])
-                    archived_count += 1
+                    to_archive_ids.append(notice.id)
+
+        archived_count = 0
+        if to_archive_ids:
+            archived_count = JanazahNotice.objects.filter(id__in=to_archive_ids).update(
+                status=JanazahNotice.StatusChoices.ARCHIVED,
+                archived_at=now,
+            )
 
         self.stdout.write(self.style.SUCCESS(f"Successfully archived {archived_count} Janazah notices."))

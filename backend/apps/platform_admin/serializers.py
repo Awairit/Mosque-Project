@@ -25,6 +25,21 @@ class CitySerializer(serializers.ModelSerializer):
         )
         read_only_fields = ("id", "timetable_status", "created_at", "updated_at")
 
+    def to_internal_value(self, data):
+        if isinstance(data, dict) and "timetable_policy" in data:
+            val = data.get("timetable_policy")
+            mapping = {
+                "Annual Upload Required": "ANNUAL_UPLOAD",
+                "Continue Previous Timetable Until Replaced": "CONTINUE_PREVIOUS",
+                "Astronomical Calculation (Future)": "ASTRONOMICAL",
+                "Official Authority Source (Future)": "AUTHORITY",
+            }
+            if val in mapping:
+                data = data.copy()
+                data["timetable_policy"] = mapping[val]
+        return super().to_internal_value(data)
+
+
     def get_timetable_status(self, obj):
         from apps.locations.models import CityDailyPrayerTiming
         from django.utils import timezone
@@ -45,6 +60,63 @@ class CitySerializer(serializers.ModelSerializer):
             "current_year": current_year,
             "needs_update": needs_update
         }
+
+
+from apps.accounts.models import CityAdmin
+
+class CityAdminSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source="user.username", read_only=True)
+    email = serializers.CharField(source="user.email", read_only=True)
+    first_name = serializers.CharField(source="user.first_name", read_only=True)
+    last_name = serializers.CharField(source="user.last_name", read_only=True)
+    city_name = serializers.CharField(source="city.name", read_only=True)
+    city_id = serializers.IntegerField(source="city.id", read_only=True)
+    mosque_id = serializers.SerializerMethodField()
+    mosque_name = serializers.SerializerMethodField()
+
+    def get_mosque_id(self, obj):
+        if hasattr(obj.user, "mosque_admin") and obj.user.mosque_admin.is_active and obj.user.mosque_admin.mosque:
+            return obj.user.mosque_admin.mosque.id
+        return None
+
+    def get_mosque_name(self, obj):
+        if hasattr(obj.user, "mosque_admin") and obj.user.mosque_admin.is_active and obj.user.mosque_admin.mosque:
+            return obj.user.mosque_admin.mosque.mosque_name
+        return None
+
+    class Meta:
+        model = CityAdmin
+        fields = (
+            "id",
+            "user_id",
+            "username",
+            "email",
+            "first_name",
+            "last_name",
+            "mobile_number",
+            "city_id",
+            "city_name",
+            "mosque_id",
+            "mosque_name",
+            "is_active",
+            "must_change_password",
+            "temporary_password_expires_at",
+            "password_changed_at",
+            "last_password_reset_at",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = (
+            "id",
+            "user_id",
+            "must_change_password",
+            "temporary_password_expires_at",
+            "password_changed_at",
+            "last_password_reset_at",
+            "created_at",
+            "updated_at",
+        )
+
 
 class SuperAdminMosqueRegistrationRequestSerializer(serializers.ModelSerializer):
     approved_by_username = serializers.CharField(source="approved_by.username", read_only=True)
@@ -131,4 +203,36 @@ class SuperAdminMosqueRegistrationRequestSerializer(serializers.ModelSerializer)
                 }
                 
         return None
+
+
+from apps.accounts.models import AccountRecoveryRequest
+
+class AccountRecoveryRequestSerializer(serializers.ModelSerializer):
+    reviewed_by_username = serializers.CharField(source="reviewed_by.username", read_only=True)
+    reopened_by_username = serializers.CharField(source="reopened_by.username", read_only=True)
+
+    class Meta:
+        model = AccountRecoveryRequest
+        fields = (
+            "id",
+            "mosque",
+            "mosque_name",
+            "applicant_name",
+            "previous_registered_contact",
+            "contact_email",
+            "contact_whatsapp",
+            "notes",
+            "status",
+            "reviewed_by",
+            "reviewed_by_username",
+            "reviewed_at",
+            "review_notes",
+            "reopened_by",
+            "reopened_by_username",
+            "reopened_at",
+            "target_user",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "created_at", "updated_at", "reviewed_by", "reviewed_at", "reopened_by", "reopened_at")
 

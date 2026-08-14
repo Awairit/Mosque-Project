@@ -18,6 +18,7 @@ class CityListAPIView(ListAPIView):
 
     serializer_class = CitySerializer
     permission_classes = [AllowAny]
+    pagination_class = None
     queryset = City.objects.all().order_by("name")
 
 

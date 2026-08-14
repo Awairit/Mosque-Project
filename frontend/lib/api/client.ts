@@ -17,7 +17,13 @@ export class ApiError extends Error {
 }
 
 export async function apiRequest<TResponse>({ path, ...init }: ApiRequestOptions) {
-  const url = new URL(path.replace(/^\//, ""), `${env.apiBaseUrl.replace(/\/$/, "")}/`);
+  // Strip leading slashes and any redundant 'api/v1/' prefix if path includes it (RC-BUG-001)
+  let normalizedPath = path.replace(/^\//, "");
+  if (normalizedPath.startsWith("api/v1/")) {
+    normalizedPath = normalizedPath.substring(7);
+  }
+
+  const url = new URL(normalizedPath, `${env.apiBaseUrl.replace(/\/$/, "")}/`);
   const headers = new Headers(init.headers);
 
   if (!headers.has("Accept")) {
@@ -31,9 +37,16 @@ export async function apiRequest<TResponse>({ path, ...init }: ApiRequestOptions
   }
 
   if (typeof window !== "undefined") {
-    const isPlatform = path.startsWith("/platform/") || path.startsWith("platform/");
-    const tokenKey = isPlatform ? "super_auth_token" : "auth_token";
-    const token = localStorage.getItem(tokenKey);
+    const isPlatform =
+      normalizedPath.startsWith("platform/") ||
+      normalizedPath.startsWith("analytics/overview");
+    const superToken = localStorage.getItem("super_auth_token");
+    const normalToken = localStorage.getItem("auth_token");
+
+    const token = isPlatform
+      ? superToken || normalToken
+      : normalToken || (normalizedPath.startsWith("city-admin/") ? null : superToken);
+
     if (token && !headers.has("Authorization")) {
       headers.set("Authorization", `Token ${token}`);
     }
@@ -48,6 +61,39 @@ export async function apiRequest<TResponse>({ path, ...init }: ApiRequestOptions
   const payload = isJson ? await response.json() : null;
 
   if (!response.ok) {
+    // Centralized 401 Unauthorized token cleanup and safe redirect (BUG-011 & RC-BUG-002)
+    if (response.status === 401 && typeof window !== "undefined") {
+      const isPublicAuthRoute =
+        normalizedPath.startsWith("auth/login") ||
+        normalizedPath.startsWith("platform/login") ||
+        normalizedPath.startsWith("auth/forgot-password") ||
+        normalizedPath.startsWith("auth/verify-otp");
+
+      const currentPath = window.location.pathname;
+      const isExcludedPage =
+        currentPath === "/login" ||
+        currentPath === "/super-admin/login" ||
+        currentPath === "/city-admin/login" ||
+        currentPath === "/change-password";
+
+      if (!isPublicAuthRoute && !isExcludedPage) {
+        localStorage.removeItem("auth_token");
+        localStorage.removeItem("super_auth_token");
+        localStorage.removeItem("user_role");
+        localStorage.removeItem("admin_mobile");
+        localStorage.removeItem("admin_mosque_id");
+        localStorage.removeItem("admin_mosque_name");
+
+        const targetLogin = normalizedPath.startsWith("platform/")
+          ? "/super-admin/login"
+          : normalizedPath.startsWith("city-admin/")
+          ? "/city-admin/login"
+          : "/login";
+
+        window.location.href = targetLogin;
+      }
+    }
+
     throw new ApiError(`API request failed with status ${response.status}`, response.status, payload);
   }
 

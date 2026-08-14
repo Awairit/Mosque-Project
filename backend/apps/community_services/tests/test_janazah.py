@@ -2,6 +2,7 @@ import datetime
 from zoneinfo import ZoneInfo
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
+from django.core.management import call_command
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework import status
@@ -444,6 +445,26 @@ class JanazahNoticeBackendTests(APITestCase):
         self.assertEqual(n1.status, "archived")
         self.assertEqual(n2.status, "archived")
         self.assertEqual(n3.status, "published")
+
+    def test_archive_expired_janazahs_query_count(self):
+        """Test BUG-012: archive_janazahs command executes in bounded 2 SQL queries."""
+        today = timezone.localdate()
+        two_days_ago = today - datetime.timedelta(days=2)
+        three_days_ago = today - datetime.timedelta(days=3)
+
+        for i in range(10):
+            JanazahNotice.objects.create(
+                mosque=self.mosque_a,
+                deceased_name=f"Bulk Expired {i}",
+                gender="male",
+                date_of_death=three_days_ago,
+                salah_date=three_days_ago,
+                salah_time=datetime.time(10, 0),
+                status="published",
+            )
+
+        with self.assertNumQueries(2):
+            call_command("archive_janazahs")
 
     def test_mosque_profile_integration(self):
         # Create active published notice for Mosque A

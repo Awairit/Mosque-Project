@@ -34,10 +34,10 @@ class CommonConfig(AppConfig):
         self._print_startup_banner()
 
     def _print_startup_banner(self):
-        provider_name = getattr(settings, "OTP_PROVIDER", "dummy").strip().lower()
+        provider_name = getattr(settings, "OTP_PROVIDER", "development").strip().lower()
         is_twilio = provider_name == "twilio"
 
-        provider_class = "TwilioVerifyProvider" if is_twilio else "DummyOTPProvider"
+        provider_class = "TwilioVerifyProvider" if is_twilio else "DevelopmentOTPProvider"
         sms_service = "Twilio Verify" if is_twilio else "Local Development (No SMS)"
 
         account_sid = bool(getattr(settings, "TWILIO_ACCOUNT_SID", False))
@@ -52,24 +52,15 @@ class CommonConfig(AppConfig):
             "============================================================",
             "🚀 Mosque Finder Backend Started",
             "",
-            "Environment : Development",
-            f"OTP Provider: {provider_class}",
-            f"SMS Service : {sms_service}",
+            "Environment   : Development",
+            f"OTP_PROVIDER  : {provider_name} (from environment)",
+            f"Active Class  : {provider_class}",
+            f"SMS Gateway   : {sms_service}",
         ]
 
         if is_twilio:
             banner.extend(
                 [
-                    "",
-                    f"Twilio Account SID      : {status(account_sid)}",
-                    f"Twilio Verify Service   : {status(verify_sid)}",
-                    f"Auth Token              : {status(auth_token)}",
-                ]
-            )
-        elif account_sid or verify_sid or auth_token:
-            banner.extend(
-                [
-                    "",
                     f"Twilio Account SID      : {status(account_sid)}",
                     f"Twilio Verify Service   : {status(verify_sid)}",
                     f"Auth Token              : {status(auth_token)}",
@@ -78,9 +69,9 @@ class CommonConfig(AppConfig):
 
         banner.append("============================================================")
         try:
-            print("\n".join(banner))
+            print("\n".join(banner), flush=True)
         except UnicodeEncodeError:
             # Fallback for Windows terminals without UTF-8 support
             safe_banner = "\n".join(banner).encode("ascii", "replace").decode("ascii")
-            print(safe_banner)
+            print(safe_banner, flush=True)
 

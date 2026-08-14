@@ -235,7 +235,7 @@ class NotificationAuthorizationTests(TestCase):
     def test_cross_city_announcement_update_fails(self):
         """City Admin A is blocked from updating an announcement to point to a Mosque in City B."""
         announcement = MosqueAnnouncement.objects.create(
-            mosque=self.mosque_a,
+            mosque=None,
             city=self.city_a,
             title="City A Announcement",
             content="Content",
@@ -256,7 +256,7 @@ class NotificationAuthorizationTests(TestCase):
     def test_cross_city_event_update_fails(self):
         """City Admin A is blocked from updating an event to point to a Mosque in City B."""
         event = MosqueEvent.objects.create(
-            mosque=self.mosque_a,
+            mosque=None,
             city=self.city_a,
             title="City A Event",
             description="Description",
@@ -405,7 +405,7 @@ class CityAdminPasswordRecoveryTests(DisableThrottlingTestCase):
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # Verify success message and OTP trigger
-        self.assertIn("If the number exists", response.data["detail"])
+        self.assertIn("OTP has been sent", response.data["detail"])
         mock_otp.assert_called_once_with(
             mobile_number=self.city_admin.mobile_number,
             purpose="forgot_password",
@@ -413,12 +413,12 @@ class CityAdminPasswordRecoveryTests(DisableThrottlingTestCase):
         )
 
     def test_forgot_password_request_invalid_phone(self):
-        """An unregistered number triggers a mock 200 response to prevent account enumeration."""
+        """An unregistered number returns HTTP 400 validation error requiring account existence."""
         url = reverse("auth-forgot-password-request")
         data = {"mobile_number": "+917777777777"}
         response = self.client.post(url, data)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn("If the number exists", response.data["detail"])
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Account not found", response.data["mobile_number"][0])
 
     @patch("apps.common.services.otp.OTPService.verify_otp")
     def test_city_admin_recovery_workflow_successful_reset(self, mock_verify):

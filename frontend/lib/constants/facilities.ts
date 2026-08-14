@@ -28,7 +28,7 @@ export type FacilityConfig = {
 export const FACILITIES_LIST: FacilityConfig[] = [
   {
     key: "women_prayer_available",
-    label: "Women's Prayer Area",
+    label: "Women's Prayer Space Available",
     desc: "Separate area for ladies to pray.",
     icon: "🚺",
     priority: 1,

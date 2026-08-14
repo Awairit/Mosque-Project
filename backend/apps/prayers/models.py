@@ -7,6 +7,8 @@ from apps.common.models import TimeStampedModel
 from apps.mosques.models import Mosque
 
 
+from django.core.validators import MaxValueValidator, MinValueValidator
+
 class PrayerTiming(TimeStampedModel):
     """Congregation (jamaat) timings for an approved Mosque."""
 
@@ -30,6 +32,11 @@ class PrayerTiming(TimeStampedModel):
         max_length=20,
         choices=CongregationMode.choices,
         default=CongregationMode.MANUAL,
+    )
+    maghrib_delay_minutes = models.PositiveSmallIntegerField(
+        default=15,
+        validators=[MinValueValidator(1), MaxValueValidator(30)],
+        help_text="Mosque-specific Jamaat delay in minutes after sunset (1-30 minutes). Applies ONLY to Maghrib.",
     )
     updated_by = models.ForeignKey(
         User,

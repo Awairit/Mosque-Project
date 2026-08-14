@@ -1,10 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { GlobalHeader } from "@/components/layout/GlobalHeader";
+import { useState, useEffect } from "react";
 import { apiRequest, ApiError } from "@/lib/api/client";
-import { ShieldAlert, Mail, MessageCircle, ClipboardList, CheckCircle2, AlertCircle } from "lucide-react";
+import { ShieldAlert, Mail, MessageCircle, ClipboardList, CheckCircle2, AlertCircle, HelpCircle } from "lucide-react";
 import { PhoneInput } from "@/components/common/PhoneInput";
 
 const SUPPORT_OPTIONS = [
@@ -26,9 +25,13 @@ const SUPPORT_OPTIONS = [
 
 export default function AccountRecoveryPage() {
   const [showForm, setShowForm] = useState(false);
+  const [registeredMosques, setRegisteredMosques] = useState<Array<{ id: number; mosque_name: string; city: string }>>([]);
+  const [selectedMosqueId, setSelectedMosqueId] = useState<number | null>(null);
+  const [showMosqueSuggestions, setShowMosqueSuggestions] = useState(false);
   const [form, setForm] = useState({
     mosque_name: "",
     applicant_name: "",
+    previous_registered_contact: "",
     contact_email: "",
     contact_whatsapp: "",
     notes: "",
@@ -37,14 +40,47 @@ export default function AccountRecoveryPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
 
+  useEffect(() => {
+    // Fetch registered mosques for lookup autocomplete
+    const fetchMosques = async () => {
+      try {
+        const res = await apiRequest<{ results: Array<{ id: number; mosque_name: string; city: string }> }>({
+          path: "/mosques/",
+        });
+        if (res.results) {
+          setRegisteredMosques(res.results);
+        }
+      } catch (err) {
+        // Fallback gracefully
+      }
+    };
+    fetchMosques();
+  }, []);
+
   const updateField = (field: keyof typeof form, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
     setErrors((prev) => ({ ...prev, [field]: "", non_field_errors: "" }));
+    if (field === "mosque_name") {
+      setSelectedMosqueId(null);
+      setShowMosqueSuggestions(true);
+    }
   };
+
+  const selectMosque = (mosque: { id: number; mosque_name: string; city: string }) => {
+    setSelectedMosqueId(mosque.id);
+    setForm((prev) => ({ ...prev, mosque_name: mosque.mosque_name }));
+    setShowMosqueSuggestions(false);
+    setErrors((prev) => ({ ...prev, mosque_name: "", non_field_errors: "" }));
+  };
+
+  const filteredMosques = registeredMosques.filter((m) =>
+    m.mosque_name.toLowerCase().includes(form.mosque_name.toLowerCase()) ||
+    (m.city && m.city.toLowerCase().includes(form.mosque_name.toLowerCase()))
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.mosque_name.trim() || !form.applicant_name.trim() || !form.contact_whatsapp.trim()) {
+    if (!form.mosque_name.trim() || !form.applicant_name.trim() || !form.previous_registered_contact.trim() || !form.contact_whatsapp.trim()) {
       setErrors({
         non_field_errors: "Please fill in all required fields.",
       });
@@ -57,7 +93,10 @@ export default function AccountRecoveryPage() {
       await apiRequest({
         path: "/auth/account-recovery/",
         method: "POST",
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          mosque_id: selectedMosqueId,
+        }),
       });
       setSuccess(true);
     } catch (err) {
@@ -77,7 +116,6 @@ export default function AccountRecoveryPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50">
-      <GlobalHeader />
       <main className="flex flex-1 flex-col items-center px-4 py-12">
         <div className="w-full max-w-xl">
           {/* Header */}
@@ -95,10 +133,21 @@ export default function AccountRecoveryPage() {
             </p>
           </div>
 
-          {/* Important note */}
-          <div className="mb-8 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-            <p className="font-semibold mb-1">Account Recovery is NOT Forgot Password</p>
-            <p>
+          {/* Guidelines Banner */}
+          <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 text-xs text-emerald-950 flex items-start gap-3">
+            <HelpCircle className="h-5 w-5 text-emerald-700 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-emerald-900">Registered Mosque Required</p>
+              <p className="mt-1 leading-relaxed text-emerald-800">
+                Account Recovery is reserved strictly for restoring access to existing registered mosques on Mosque Finder. Select your registered mosque below.
+              </p>
+            </div>
+          </div>
+
+          {/* Notice: Automated Password Reset */}
+          <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-4 text-xs text-slate-600 shadow-sm flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-slate-400 flex-shrink-0 mt-0.5" />
+            <p className="leading-relaxed">
               If you still have access to your registered WhatsApp number or email,{" "}
               <Link href="/forgot-password" className="font-semibold underline underline-offset-2">
                 use Forgot Password
@@ -121,7 +170,8 @@ export default function AccountRecoveryPage() {
                 onClick={() => {
                   setSuccess(false);
                   setShowForm(false);
-                  setForm({ mosque_name: "", applicant_name: "", contact_email: "", contact_whatsapp: "", notes: "" });
+                  setSelectedMosqueId(null);
+                  setForm({ mosque_name: "", applicant_name: "", previous_registered_contact: "", contact_email: "", contact_whatsapp: "", notes: "" });
                 }}
                 className="mt-6 rounded-full bg-emerald-900 px-6 py-2 text-sm font-semibold text-white transition hover:bg-emerald-950"
               >
@@ -136,18 +186,38 @@ export default function AccountRecoveryPage() {
                 Account Recovery Request Form
               </h2>
 
-              <div>
+              <div className="relative">
                 <label className="block text-sm font-semibold text-slate-900">
-                  Mosque Name <span className="text-red-700">*</span>
+                  Select Registered Mosque <span className="text-red-700">*</span>
                 </label>
+                <p className="text-xs text-slate-500 mt-0.5">Search and select your registered mosque from Mosque Finder.</p>
                 <input
                   type="text"
                   required
                   value={form.mosque_name}
                   onChange={(e) => updateField("mosque_name", e.target.value)}
-                  placeholder="Official name of the mosque"
+                  onFocus={() => setShowMosqueSuggestions(true)}
+                  placeholder="e.g. Masjide Quba"
                   className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 px-4 text-slate-950 outline-none transition focus:border-emerald-900 focus:ring-4 focus:ring-emerald-900/10"
                 />
+
+                {/* Autocomplete Dropdown */}
+                {showMosqueSuggestions && form.mosque_name.trim().length > 0 && filteredMosques.length > 0 && (
+                  <div className="absolute z-20 mt-1 w-full max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+                    {filteredMosques.map((m) => (
+                      <div
+                        key={m.id}
+                        onClick={() => selectMosque(m)}
+                        className="cursor-pointer px-4 py-2 text-xs hover:bg-emerald-50 hover:text-emerald-900 transition flex items-center justify-between"
+                      >
+                        <span className="font-semibold text-slate-900">{m.mosque_name}</span>
+                        {m.city && <span className="text-slate-500 text-[11px]">{m.city}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {errors.mosque_name && <p className="mt-1 text-xs text-red-650 font-medium">{errors.mosque_name}</p>}
               </div>
 
               <div>
@@ -164,27 +234,45 @@ export default function AccountRecoveryPage() {
                 />
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div>
                 <PhoneInput
-                  id="contact_whatsapp"
-                  label="New WhatsApp Contact"
-                  value={form.contact_whatsapp}
-                  onChange={(val) => updateField("contact_whatsapp", val)}
+                  id="previous_registered_contact"
+                  label="Previous Registered Contact Number"
+                  hint="The phone number currently registered for this mosque."
+                  value={form.previous_registered_contact}
+                  onChange={(val) => updateField("previous_registered_contact", val)}
                   disabled={isSubmitting}
-                  error={errors.contact_whatsapp}
+                  error={errors.previous_registered_contact}
                   required
                 />
+              </div>
 
-                <div>
-                  <label className="block text-sm font-semibold text-slate-900">
+              <div className="grid gap-4 sm:grid-cols-2 items-start w-full">
+                <div className="min-w-0">
+                  <PhoneInput
+                    id="contact_whatsapp"
+                    label="New WhatsApp Contact"
+                    hint="The new number you want to use."
+                    value={form.contact_whatsapp}
+                    onChange={(val) => updateField("contact_whatsapp", val)}
+                    disabled={isSubmitting}
+                    error={errors.contact_whatsapp}
+                    required
+                  />
+                </div>
+
+                <div className="grid gap-1.5 w-full min-w-0">
+                  <label htmlFor="contact_email" className="block text-sm font-semibold text-slate-900">
                     New Email Contact
                   </label>
+                  <p className="text-xs text-slate-500">The new official contact email, if applicable.</p>
                   <input
+                    id="contact_email"
                     type="email"
                     value={form.contact_email}
                     onChange={(e) => updateField("contact_email", e.target.value)}
                     placeholder="e.g. admin@mosque.org"
-                    className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 px-4 text-slate-950 outline-none transition focus:border-emerald-900 focus:ring-4 focus:ring-emerald-900/10"
+                    className="min-h-12 h-12 w-full rounded-xl border border-slate-200 px-4 text-slate-950 outline-none transition focus:border-emerald-900 focus:ring-4 focus:ring-emerald-900/10"
                   />
                 </div>
               </div>

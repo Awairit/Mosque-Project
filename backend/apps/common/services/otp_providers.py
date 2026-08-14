@@ -94,16 +94,16 @@ class BaseOTPProvider(ABC):
 
 
 # ---------------------------------------------------------------------------
-# DummyOTPProvider  (development / testing)
+# ---------------------------------------------------------------------------
+# DevelopmentOTPProvider  (development / testing)
 # ---------------------------------------------------------------------------
 
-class DummyOTPProvider(BaseOTPProvider):
-    """Local OTP provider that stores codes in the database.
+class DevelopmentOTPProvider(BaseOTPProvider):
+    """Local OTP provider that generates and stores OTPs in the database for development.
 
-    - No external service is required.
-    - Generated OTPs are printed to the Django console so developers can
-      complete flows without a real phone.
-    - DummyNotificationProvider is used to log the SMS delivery.
+    - No external service or SMS gateway (e.g. Twilio) is called.
+    - Generated OTPs are printed to the server console in a clear box format.
+    - Preserves security rules (purpose isolation, expiration, attempt limits).
     """
 
     OTP_LENGTH = 6
@@ -118,6 +118,20 @@ class DummyOTPProvider(BaseOTPProvider):
 
     def _generate_code(self) -> str:
         return "".join(random.choices(string.digits, k=self.OTP_LENGTH))
+
+    def _log_development_otp(self, mobile_number: str, purpose: str, code: str, expiry_minutes: int):
+        log_block = (
+            f"\n============================================================\n"
+            f"DEVELOPMENT OTP\n"
+            f"============================================================\n"
+            f"Phone   : {mobile_number}\n"
+            f"Purpose : {purpose}\n"
+            f"OTP     : {code}\n"
+            f"Expires : {expiry_minutes} minutes\n"
+            f"============================================================\n"
+        )
+        print(log_block, flush=True)
+        logger.info("Development OTP generated for %s (purpose=%s)", mobile_number, purpose)
 
     def generate_and_send(self, mobile_number: str, purpose: str) -> ProviderResult:
         # Invalidate any existing active OTPs for this number + purpose.
@@ -152,21 +166,17 @@ class DummyOTPProvider(BaseOTPProvider):
             f"Your verification code is {code}. "
             f"It expires in {expiry_minutes} minutes."
         )
-        sent = self._notification_service().send_sms(
+        self._notification_service().send_sms(
             recipient=mobile_number, message=message
         )
-        if sent:
-            return ProviderResult(
-                success=True,
-                code=OTPErrorCode.SUCCESS,
-                message="OTP sent successfully.",
-                provider="dummy",
-            )
+
+        self._log_development_otp(mobile_number, purpose, code, expiry_minutes)
+
         return ProviderResult(
-            success=False,
-            code=OTPErrorCode.UNKNOWN_PROVIDER_ERROR,
-            message="Failed to send dummy OTP.",
-            provider="dummy",
+            success=True,
+            code=OTPErrorCode.SUCCESS,
+            message="OTP sent successfully.",
+            provider="development",
         )
 
     def verify(self, mobile_number: str, purpose: str, code: str) -> ProviderResult:
@@ -185,7 +195,7 @@ class DummyOTPProvider(BaseOTPProvider):
                 success=False,
                 code=OTPErrorCode.VERIFICATION_FAILED,
                 message="Invalid request.",
-                provider="dummy",
+                provider="development",
             )
 
         if verification.attempts >= verification.max_attempts:
@@ -195,7 +205,7 @@ class DummyOTPProvider(BaseOTPProvider):
                 success=False,
                 code=OTPErrorCode.VERIFICATION_FAILED,
                 message="Maximum attempts reached. Please request a new OTP.",
-                provider="dummy",
+                provider="development",
             )
 
         if timezone.now() > verification.expires_at:
@@ -205,7 +215,7 @@ class DummyOTPProvider(BaseOTPProvider):
                 success=False,
                 code=OTPErrorCode.OTP_EXPIRED,
                 message="OTP has expired. Please request a new one.",
-                provider="dummy",
+                provider="development",
             )
 
         verification.attempts += 1
@@ -218,7 +228,7 @@ class DummyOTPProvider(BaseOTPProvider):
                 success=True,
                 code=OTPErrorCode.SUCCESS,
                 message="OTP verified successfully.",
-                provider="dummy",
+                provider="development",
             )
 
         verification.save(update_fields=["attempts"])
@@ -226,8 +236,12 @@ class DummyOTPProvider(BaseOTPProvider):
             success=False,
             code=OTPErrorCode.VERIFICATION_FAILED,
             message="Invalid OTP code.",
-            provider="dummy",
+            provider="development",
         )
+
+
+# Backward compatibility alias
+DummyOTPProvider = DevelopmentOTPProvider
 
 
 # ---------------------------------------------------------------------------
@@ -498,22 +512,22 @@ class TwilioVerifyProvider(BaseOTPProvider):
 def get_otp_provider() -> BaseOTPProvider:
     """Return the configured OTP provider based on ``settings.OTP_PROVIDER``.
 
-    OTP_PROVIDER=dummy   → DummyOTPProvider
-    OTP_PROVIDER=twilio  → TwilioVerifyProvider
+    OTP_PROVIDER=development / dummy → DevelopmentOTPProvider
+    OTP_PROVIDER=twilio             → TwilioVerifyProvider
 
     New providers can be added here without touching any business logic.
     """
-    provider_name = getattr(settings, "OTP_PROVIDER", "dummy").strip().lower()
+    provider_name = getattr(settings, "OTP_PROVIDER", "development").strip().lower()
 
     if provider_name == "twilio":
         logger.info("OTP provider: TwilioVerifyProvider")
         return TwilioVerifyProvider()
 
-    if provider_name == "dummy":
-        logger.info("OTP provider: DummyOTPProvider")
-        return DummyOTPProvider()
+    if provider_name in ("development", "dev", "dummy"):
+        logger.info("OTP provider: DevelopmentOTPProvider")
+        return DevelopmentOTPProvider()
 
     raise ValueError(
         f"Unknown OTP_PROVIDER '{provider_name}'. "
-        "Supported values: 'dummy', 'twilio'."
+        "Supported values: 'development', 'dummy', 'twilio'."
     )

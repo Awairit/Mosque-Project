@@ -15,6 +15,10 @@ from apps.accounts.views import (
     ForgotPasswordVerifyAPIView,
     ForgotPasswordResetAPIView,
     AccountRecoveryRequestAPIView,
+    CityAdminProfileAPIView,
+    CityAdminChangePasswordAPIView,
+    CityAdminMobileChangeRequestAPIView,
+    CityAdminMobileChangeVerifyAPIView,
 )
 from apps.mosques.views import (
     DashboardMosqueProfileAPIView,
@@ -32,7 +36,11 @@ from apps.mosques.views import (
     PublicAnnouncementListAPIView,
     PublicEventListAPIView,
     CityAdminDashboardStatsAPIView,
+    CityAdminMosqueListAPIView,
+    CityAdminMosqueStatusAPIView,
 )
+
+
 from apps.prayers.views import DashboardPrayerTimingAPIView
 
 
@@ -40,11 +48,18 @@ def health_check(_request):
     return JsonResponse({"status": "ok", "api_version": "v1"})
 
 
+from apps.community_services.views import DashboardJanazahNoticeViewSet
+
 router = DefaultRouter()
 router.register(r"dashboard/photos", DashboardMosquePhotoViewSet, basename="dashboard-photos")
+router.register(r"mosques/my-mosque/photos", DashboardMosquePhotoViewSet, basename="my-mosque-photos")
 router.register(r"dashboard/announcements", DashboardMosqueAnnouncementViewSet, basename="dashboard-announcements")
+router.register(r"mosques/my-mosque/announcements", DashboardMosqueAnnouncementViewSet, basename="my-mosque-announcements")
 router.register(r"dashboard/events", DashboardMosqueEventViewSet, basename="dashboard-events")
+router.register(r"mosques/my-mosque/events", DashboardMosqueEventViewSet, basename="my-mosque-events")
 router.register(r"dashboard/schedules", DashboardCommunityScheduleViewSet, basename="dashboard-schedules")
+router.register(r"dashboard/janazah", DashboardJanazahNoticeViewSet, basename="dashboard-janazah")
+router.register(r"mosques/my-mosque/janazah", DashboardJanazahNoticeViewSet, basename="my-mosque-janazah")
 router.register(r"city-admin/announcements", CityAdminAnnouncementViewSet, basename="city-admin-announcements")
 router.register(r"city-admin/events", CityAdminEventViewSet, basename="city-admin-events")
 
@@ -88,14 +103,29 @@ urlpatterns = [
         name="dashboard-mosque-profile",
     ),
     path(
+        "mosques/my-mosque/",
+        DashboardMosqueProfileAPIView.as_view(),
+        name="my-mosque-profile",
+    ),
+    path(
         "dashboard/operating-schedule/",
         DashboardOperatingScheduleAPIView.as_view(),
         name="dashboard-operating-schedule",
     ),
     path(
+        "mosques/my-mosque/schedule/",
+        DashboardOperatingScheduleAPIView.as_view(),
+        name="my-mosque-schedule",
+    ),
+    path(
         "dashboard/prayer-timings/",
         DashboardPrayerTimingAPIView.as_view(),
         name="dashboard-prayer-timings",
+    ),
+    path(
+        "mosques/my-mosque/timings/",
+        DashboardPrayerTimingAPIView.as_view(),
+        name="my-mosque-timings",
     ),
     path(
         "mosque-registration/otp/request/",
@@ -123,6 +153,38 @@ urlpatterns = [
         name="city-admin-dashboard-stats",
     ),
     path(
+        "city-admin/mosques/",
+        CityAdminMosqueListAPIView.as_view(),
+        name="city-admin-mosques-list",
+    ),
+    path(
+        "city-admin/mosques/<int:pk>/status/",
+        CityAdminMosqueStatusAPIView.as_view(),
+        name="city-admin-mosques-status",
+    ),
+    path(
+        "city-admin/profile/",
+        CityAdminProfileAPIView.as_view(),
+        name="city-admin-profile",
+    ),
+    path(
+        "city-admin/change-password/",
+        CityAdminChangePasswordAPIView.as_view(),
+        name="city-admin-change-password",
+    ),
+    path(
+        "city-admin/change-mobile/request/",
+        CityAdminMobileChangeRequestAPIView.as_view(),
+        name="city-admin-change-mobile-request",
+    ),
+    path(
+        "city-admin/change-mobile/verify/",
+        CityAdminMobileChangeVerifyAPIView.as_view(),
+        name="city-admin-change-mobile-verify",
+    ),
+
+
+    path(
         "public/announcements/",
         PublicAnnouncementListAPIView.as_view(),
         name="public-announcements-list",
@@ -140,5 +202,7 @@ urlpatterns = [
     path("moderation/", include("apps.moderation.urls")),
     path("events/", include("apps.events.urls")),
     path("platform/", include("apps.platform_admin.urls")),
+    path("analytics/", include("apps.analytics.urls")),
     path("", include("apps.community_services.urls")),
 ] + router.urls
+
