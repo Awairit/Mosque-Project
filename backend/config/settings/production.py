@@ -45,6 +45,13 @@ SECURE_HSTS_PRELOAD = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
 
+REST_FRAMEWORK = {
+    **REST_FRAMEWORK,  # noqa: F405
+    "DEFAULT_RENDERER_CLASSES": [
+        "rest_framework.renderers.JSONRenderer",
+    ],
+}
+
 import sys
 
 LOGGING = {
