@@ -17,22 +17,29 @@ class ResolvedPrayerTiming:
     maghrib_delay_minutes: int = 15
 
 
-def ensure_time(t) -> time:
-    """Helper to convert string time representation to datetime.time if necessary."""
+def ensure_time(t) -> time | None:
+    """Helper to convert string or time representation to datetime.time safely."""
+    if t is None:
+        return None
     if isinstance(t, time):
         return t
     if isinstance(t, str):
+        t_str = t.strip()
+        if not t_str:
+            return None
         for fmt in ("%H:%M:%S", "%H:%M"):
             try:
-                return datetime.strptime(t, fmt).time()
+                return datetime.strptime(t_str, fmt).time()
             except ValueError:
                 pass
-    raise ValueError(f"Could not convert {t} to datetime.time")
+    return None
 
 
-def add_minutes_to_time(t, minutes: int) -> time:
+def add_minutes_to_time(t, minutes: int) -> time | None:
     """Safely adds minutes to a datetime.time or string time object, handling rollovers."""
     t_obj = ensure_time(t)
+    if t_obj is None:
+        return None
     dt = datetime.combine(date.today(), t_obj) + timedelta(minutes=minutes)
     return dt.time()
 
@@ -41,7 +48,9 @@ class PrayerTimingService:
     """Encapsulates prayer timing resolution business logic."""
 
     @staticmethod
-    def resolve_timing(timing, date_val: date = None) -> ResolvedPrayerTiming:
+    def resolve_timing(timing, date_val: date = None) -> ResolvedPrayerTiming | None:
+        if not timing:
+            return None
         if date_val is None:
             date_val = date.today()
 
@@ -81,7 +90,7 @@ class PrayerTimingService:
                         date=date_val
                     ).first()
 
-                if daily_timing:
+                if daily_timing and daily_timing.maghrib_time:
                     # If mosque has explicitly configured delay (differs from default 15) or city offset is set
                     if delay_mins != 15:
                         offset_to_use = delay_mins
@@ -90,20 +99,35 @@ class PrayerTimingService:
                     else:
                         offset_to_use = delay_mins
 
-                    resolved_maghrib = add_minutes_to_time(
+                    offset_maghrib = add_minutes_to_time(
                         daily_timing.maghrib_time,
                         offset_to_use
                     )
+                    if offset_maghrib:
+                        resolved_maghrib = offset_maghrib
+
+        fajr = ensure_time(timing.fajr_time)
+        dhuhr = ensure_time(timing.dhuhr_time)
+        asr = ensure_time(timing.asr_time)
+        maghrib = resolved_maghrib
+        isha = ensure_time(timing.isha_time)
+        jumuah = ensure_time(timing.jumuah_time)
+
+        # If any prayer time field is missing or unparseable, resolution is incomplete.
+        if not all([fajr, dhuhr, asr, maghrib, isha, jumuah]):
+            return None
+
+        eff_from = timing.effective_from or date_val
 
         resolved = ResolvedPrayerTiming(
-            fajr_time=ensure_time(timing.fajr_time),
-            dhuhr_time=ensure_time(timing.dhuhr_time),
-            asr_time=ensure_time(timing.asr_time),
-            maghrib_time=resolved_maghrib,
-            isha_time=ensure_time(timing.isha_time),
-            jumuah_time=ensure_time(timing.jumuah_time),
-            effective_from=timing.effective_from,
-            maghrib_congregation_mode=timing.maghrib_congregation_mode,
+            fajr_time=fajr,
+            dhuhr_time=dhuhr,
+            asr_time=asr,
+            maghrib_time=maghrib,
+            isha_time=isha,
+            jumuah_time=jumuah,
+            effective_from=eff_from,
+            maghrib_congregation_mode=timing.maghrib_congregation_mode or PrayerTiming.CongregationMode.MANUAL,
             maghrib_delay_minutes=delay_mins,
         )
 

@@ -214,14 +214,25 @@ class MosqueListAPIView(ListAPIView):
             else:
                 filtered_candidates = candidate_list
 
-        serializer = self.get_serializer(
-            filtered_candidates,
-            many=True,
-            context={"request": request, "lat": user_lat, "lon": user_lon}
-        )
+        try:
+            serializer = self.get_serializer(
+                filtered_candidates,
+                many=True,
+                context={"request": request, "lat": user_lat, "lon": user_lon}
+            )
+            data = serializer.data
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).error("Unexpected error serializing mosque list: %s", exc, exc_info=True)
+            return Response({
+                "count": 0,
+                "results": [],
+                "error": "Failed to serialize mosque records."
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
         return Response({
-            "count": len(serializer.data),
-            "results": serializer.data
+            "count": len(data),
+            "results": data
         })
 
 

@@ -181,16 +181,21 @@ class MosqueAvailabilityEngine:
     def __init__(self, mosque: Mosque, current_dt=None):
         self.mosque = mosque
         
-        from zoneinfo import ZoneInfo
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
         
         city_ref = self.mosque.city_relation if self.mosque.city_relation else self.mosque.city
         self.tz_name = self.get_city_timezone(city_ref)
         
+        try:
+            tz = ZoneInfo(self.tz_name)
+        except (ZoneInfoNotFoundError, KeyError, ValueError, TypeError):
+            tz = ZoneInfo("Asia/Kolkata")
+
         if current_dt is None:
-            self.current_dt = django_timezone.now().astimezone(ZoneInfo(self.tz_name))
+            self.current_dt = django_timezone.now().astimezone(tz)
         else:
             if django_timezone.is_aware(current_dt):
-                self.current_dt = current_dt.astimezone(ZoneInfo(self.tz_name))
+                self.current_dt = current_dt.astimezone(tz)
             else:
                 self.current_dt = current_dt
         
@@ -211,7 +216,7 @@ class MosqueAvailabilityEngine:
 
         try:
             schedule = self.mosque.operating_schedule
-        except MosqueOperatingSchedule.DoesNotExist:
+        except (MosqueOperatingSchedule.DoesNotExist, AttributeError):
             schedule = None
 
         if schedule is None:
@@ -329,34 +334,38 @@ class MosqueAvailabilityEngine:
         from apps.prayers.models import PrayerTiming
         try:
             timing = self.mosque.prayer_timing
-        except PrayerTiming.DoesNotExist:
+        except (PrayerTiming.DoesNotExist, AttributeError):
             timing = None
 
-        from apps.prayers.services import CongregationTimingResolver
-        resolved = CongregationTimingResolver.resolve_prayer_timing(timing, self.current_date)
+        try:
+            from zoneinfo import ZoneInfoNotFoundError
+            from apps.prayers.services import CongregationTimingResolver
+            resolved = CongregationTimingResolver.resolve_prayer_timing(timing, self.current_date)
 
-        if resolved is not None:
-            prayers = [
-                ("Fajr", resolved.fajr_time),
-                ("Dhuhr", resolved.dhuhr_time),
-                ("Asr", resolved.asr_time),
-                ("Maghrib", resolved.maghrib_time),
-                ("Isha", resolved.isha_time),
-            ]
-            # Find next prayer today
-            next_p = None
-            for name, p_time in prayers:
-                if p_time > self.current_time:
-                    next_p = (name, p_time)
-                    break
+            if resolved is not None:
+                prayers = [
+                    ("Fajr", resolved.fajr_time),
+                    ("Dhuhr", resolved.dhuhr_time),
+                    ("Asr", resolved.asr_time),
+                    ("Maghrib", resolved.maghrib_time),
+                    ("Isha", resolved.isha_time),
+                ]
+                # Find next prayer today
+                next_p = None
+                for name, p_time in prayers:
+                    if p_time and p_time > self.current_time:
+                        next_p = (name, p_time)
+                        break
 
-            if next_p is None:
-                # Rollover to tomorrow's Fajr
-                next_prayer_name = "Fajr"
-                next_prayer_time = resolved.fajr_time.strftime("%I:%M %p")
-            else:
-                next_prayer_name = next_p[0]
-                next_prayer_time = next_p[1].strftime("%I:%M %p")
+                if next_p is None:
+                    # Rollover to tomorrow's Fajr
+                    next_prayer_name = "Fajr"
+                    next_prayer_time = resolved.fajr_time.strftime("%I:%M %p") if resolved.fajr_time else None
+                else:
+                    next_prayer_name = next_p[0]
+                    next_prayer_time = next_p[1].strftime("%I:%M %p")
+        except (ValueError, TypeError, AttributeError, ZoneInfoNotFoundError):
+            pass
 
         return {
             "is_open": is_open,

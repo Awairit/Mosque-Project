@@ -242,47 +242,68 @@ class MosqueListSerializer(serializers.ModelSerializer):
         return obj.city_relation_id
 
     def get_operating_status(self, obj) -> dict:
-        engine = MosqueAvailabilityEngine(obj)
-        return engine.get_availability()
+        try:
+            engine = MosqueAvailabilityEngine(obj)
+            return engine.get_availability()
+        except (ValueError, TypeError, AttributeError, ZoneInfoNotFoundError) as exc:
+            import logging
+            logging.getLogger(__name__).warning("Error calculating operating status for mosque %s: %s", getattr(obj, "id", None), exc)
+            return {
+                "is_open": False,
+                "status_label": "Schedule Not Verified",
+                "current_window": None,
+                "closes_at": None,
+                "opens_at": None,
+                "next_prayer_name": None,
+                "next_prayer_time": None,
+            }
 
     def get_prayer_timing(self, obj) -> dict | None:
-        from apps.prayers.services import CongregationTimingResolver
-        from apps.prayers.serializers import ResolvedPrayerTimingSerializer
-        from apps.prayers.models import PrayerTiming
-        from zoneinfo import ZoneInfo
-        from django.utils import timezone
-        
         try:
-            timing = obj.prayer_timing
-        except PrayerTiming.DoesNotExist:
-            return None
+            from apps.prayers.services import CongregationTimingResolver
+            from apps.prayers.serializers import ResolvedPrayerTimingSerializer
+            from apps.prayers.models import PrayerTiming
+            from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+            from django.utils import timezone
             
-        date_val = self.context.get("date")
-        if not date_val:
-            city = obj.city_relation
-            tz_name = city.timezone if (city and city.timezone) else "Asia/Kolkata"
-            date_val = timezone.now().astimezone(ZoneInfo(tz_name)).date()
-            
-        resolved = CongregationTimingResolver.resolve_prayer_timing(timing, date_val)
-        if not resolved:
-            return None
+            try:
+                timing = obj.prayer_timing
+            except (PrayerTiming.DoesNotExist, AttributeError):
+                return None
 
-        # Build a plain dict from the resolved dataclass, then add the ORM-level
-        # timestamp (already in memory via select_related — no extra DB query).
-        # We serialise via ResolvedPrayerTimingSerializer so field formatting
-        # (time format strings, date format, etc.) stays in one place.
-        payload = {
-            "fajr_time": resolved.fajr_time,
-            "dhuhr_time": resolved.dhuhr_time,
-            "asr_time": resolved.asr_time,
-            "maghrib_time": resolved.maghrib_time,
-            "isha_time": resolved.isha_time,
-            "jumuah_time": resolved.jumuah_time,
-            "effective_from": resolved.effective_from,
-            "maghrib_congregation_mode": resolved.maghrib_congregation_mode,
-            "updated_at": timing.updated_at if timing.updated_at else None,
-        }
-        return ResolvedPrayerTimingSerializer(payload).data
+            if not timing:
+                return None
+
+            date_val = self.context.get("date")
+            if not date_val:
+                city = obj.city_relation
+                tz_name = city.timezone if (city and city.timezone) else "Asia/Kolkata"
+                try:
+                    tz = ZoneInfo(tz_name)
+                except (ZoneInfoNotFoundError, KeyError, ValueError, TypeError):
+                    tz = ZoneInfo("Asia/Kolkata")
+                date_val = timezone.now().astimezone(tz).date()
+
+            resolved = CongregationTimingResolver.resolve_prayer_timing(timing, date_val)
+            if not resolved:
+                return None
+
+            payload = {
+                "fajr_time": resolved.fajr_time,
+                "dhuhr_time": resolved.dhuhr_time,
+                "asr_time": resolved.asr_time,
+                "maghrib_time": resolved.maghrib_time,
+                "isha_time": resolved.isha_time,
+                "jumuah_time": resolved.jumuah_time,
+                "effective_from": resolved.effective_from,
+                "maghrib_congregation_mode": resolved.maghrib_congregation_mode,
+                "updated_at": timing.updated_at if getattr(timing, "updated_at", None) else None,
+            }
+            return ResolvedPrayerTimingSerializer(payload).data
+        except (ValueError, TypeError, AttributeError, ZoneInfoNotFoundError) as exc:
+            import logging
+            logging.getLogger(__name__).warning("Error serializing prayer timing for mosque %s: %s", getattr(obj, "id", None), exc)
+            return None
 
 
     def get_distance(self, obj) -> float | None:
