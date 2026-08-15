@@ -143,97 +143,118 @@ class MosqueListAPIView(ListAPIView):
         return queryset.order_by("mosque_name")
 
     def list(self, request, *args, **kwargs):
-        lat = request.query_params.get("lat")
-        lon = request.query_params.get("lon")
-        in_bbox = request.query_params.get("in_bbox")
-        open_now = request.query_params.get("open_now") == "true"
-
-        queryset = self.get_queryset()
-
-        user_lat = None
-        user_lon = None
-        if lat is not None and lon is not None:
-            try:
-                user_lat = float(lat)
-                user_lon = float(lon)
-            except ValueError:
-                pass
-
-        if user_lat is not None and user_lon is not None and not in_bbox:
-            # Proximity pre-filtering for nearest list (100 km radius)
-            radius_km = 100.0
-            lat_delta = radius_km / 111.1
-            min_lat = user_lat - lat_delta
-            max_lat = user_lat + lat_delta
-
-            cos_lat = math.cos(math.radians(user_lat))
-            lon_delta = radius_km / (111.1 * cos_lat) if cos_lat > 0.01 else radius_km / 111.1
-            min_lon = user_lon - lon_delta
-            max_lon = user_lon + lon_delta
-
-            candidates = queryset.filter(
-                latitude__range=(min_lat, max_lat),
-                longitude__range=(min_lon, max_lon)
-            )
-            if candidates.count() < 5:
-                candidates = queryset
-        else:
-            candidates = queryset
-
-        # 1. Compute Haversine distance strictly using actual mosque coordinates (Invariant 2 & 3)
-        candidate_list = list(candidates)
-        for m in candidate_list:
-            m_lat = float(m.latitude) if m.latitude is not None else None
-            m_lon = float(m.longitude) if m.longitude is not None else None
-
-            if user_lat is not None and user_lon is not None and m_lat is not None and m_lon is not None:
-                m.distance_val = calculate_haversine(user_lat, user_lon, m_lat, m_lon)
-            else:
-                m.distance_val = None
-
-        # 2. Sort nearest-first by real distance if user location is provided
-        if user_lat is not None and user_lon is not None:
-            candidate_list.sort(key=lambda x: x.distance_val if x.distance_val is not None else float('inf'))
-
-        # 3. Apply open_now filter and top-5/bbox slicing efficiently
-        target_limit = None if in_bbox else 5
-        filtered_candidates = []
-
-        if open_now:
-            from apps.mosques.services import MosqueAvailabilityEngine
-            for m in candidate_list:
-                engine = MosqueAvailabilityEngine(m)
-                avail = engine.get_availability()
-                if avail.get("is_open"):
-                    filtered_candidates.append(m)
-                    if target_limit and len(filtered_candidates) >= target_limit:
-                        break
-        else:
-            if target_limit:
-                filtered_candidates = candidate_list[:target_limit]
-            else:
-                filtered_candidates = candidate_list
+        import logging
+        logger = logging.getLogger(__name__)
+        stage = "1_start"
 
         try:
+            stage = "2_get_queryset"
+            lat = request.query_params.get("lat")
+            lon = request.query_params.get("lon")
+            in_bbox = request.query_params.get("in_bbox")
+            open_now = request.query_params.get("open_now") == "true"
+
+            queryset = self.get_queryset()
+
+            user_lat = None
+            user_lon = None
+            if lat is not None and lon is not None:
+                try:
+                    user_lat = float(lat)
+                    user_lon = float(lon)
+                except ValueError:
+                    pass
+
+            if user_lat is not None and user_lon is not None and not in_bbox:
+                radius_km = 100.0
+                lat_delta = radius_km / 111.1
+                min_lat = user_lat - lat_delta
+                max_lat = user_lat + lat_delta
+
+                cos_lat = math.cos(math.radians(user_lat))
+                lon_delta = radius_km / (111.1 * cos_lat) if cos_lat > 0.01 else radius_km / 111.1
+                min_lon = user_lon - lon_delta
+                max_lon = user_lon + lon_delta
+
+                candidates = queryset.filter(
+                    latitude__range=(min_lat, max_lat),
+                    longitude__range=(min_lon, max_lon)
+                )
+                if candidates.count() < 5:
+                    candidates = queryset
+            else:
+                candidates = queryset
+
+            stage = "3_evaluate_candidates_query"
+            candidate_list = list(candidates)
+
+            stage = "4_haversine_distance_calculation"
+            for m in candidate_list:
+                m_lat = float(m.latitude) if m.latitude is not None else None
+                m_lon = float(m.longitude) if m.longitude is not None else None
+
+                if user_lat is not None and user_lon is not None and m_lat is not None and m_lon is not None:
+                    m.distance_val = calculate_haversine(user_lat, user_lon, m_lat, m_lon)
+                else:
+                    m.distance_val = None
+
+            if user_lat is not None and user_lon is not None:
+                candidate_list.sort(key=lambda x: x.distance_val if x.distance_val is not None else float('inf'))
+
+            stage = "5_open_now_filtering_and_slicing"
+            target_limit = None if in_bbox else 5
+            filtered_candidates = []
+
+            if open_now:
+                from apps.mosques.services import MosqueAvailabilityEngine
+                for m in candidate_list:
+                    engine = MosqueAvailabilityEngine(m)
+                    avail = engine.get_availability()
+                    if avail.get("is_open"):
+                        filtered_candidates.append(m)
+                        if target_limit and len(filtered_candidates) >= target_limit:
+                            break
+            else:
+                if target_limit:
+                    filtered_candidates = candidate_list[:target_limit]
+                else:
+                    filtered_candidates = candidate_list
+
+            stage = "6_serializer_instantiation"
             serializer = self.get_serializer(
                 filtered_candidates,
                 many=True,
                 context={"request": request, "lat": user_lat, "lon": user_lon}
             )
-            data = serializer.data
-        except Exception as exc:
-            import logging
-            logging.getLogger(__name__).error("Unexpected error serializing mosque list: %s", exc, exc_info=True)
-            return Response({
-                "count": 0,
-                "results": [],
-                "error": "Failed to serialize mosque records."
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        return Response({
-            "count": len(data),
-            "results": data
-        })
+            stage = "7_serializer_data_evaluation"
+            data = serializer.data
+
+            stage = "8_response_construction"
+            mosque_ids = [m.id for m in filtered_candidates]
+            logger.info(
+                "[DIAGNOSTIC_SUCCESS] Path='%s' | QueryParams=%s | CandidatesCount=%d | FilteredCount=%d | MosqueIDs=%s",
+                request.path,
+                dict(request.query_params),
+                len(candidate_list),
+                len(filtered_candidates),
+                mosque_ids,
+            )
+            return Response({
+                "count": len(data),
+                "results": data
+            })
+        except Exception as exc:
+            logger.error(
+                "[DIAGNOSTIC_FAILURE] Stage='%s' | Path='%s' | QueryParams=%s | Exception=%s: %s",
+                stage,
+                request.path,
+                dict(request.query_params),
+                type(exc).__name__,
+                exc,
+                exc_info=True,
+            )
+            raise exc
 
 
 class MosqueDetailAPIView(RetrieveAPIView):

@@ -234,29 +234,52 @@ class MosqueListSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_city(self, obj) -> str:
-        if obj.city_relation:
-            return obj.city_relation.name
-        return obj.city or ""
+        try:
+            if obj.city_relation:
+                return obj.city_relation.name
+            return obj.city or ""
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).error(
+                "[FIELD_DIAGNOSTIC_FAILURE] MosqueID=%s MosqueName='%s' Field='city' Exception=%s: %s",
+                getattr(obj, "id", None),
+                getattr(obj, "mosque_name", None),
+                type(exc).__name__,
+                exc,
+                exc_info=True,
+            )
+            raise exc
 
     def get_city_id(self, obj) -> int | None:
-        return obj.city_relation_id
+        try:
+            return obj.city_relation_id
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).error(
+                "[FIELD_DIAGNOSTIC_FAILURE] MosqueID=%s MosqueName='%s' Field='city_id' Exception=%s: %s",
+                getattr(obj, "id", None),
+                getattr(obj, "mosque_name", None),
+                type(exc).__name__,
+                exc,
+                exc_info=True,
+            )
+            raise exc
 
     def get_operating_status(self, obj) -> dict:
         try:
             engine = MosqueAvailabilityEngine(obj)
             return engine.get_availability()
-        except (ValueError, TypeError, AttributeError, ZoneInfoNotFoundError) as exc:
+        except Exception as exc:
             import logging
-            logging.getLogger(__name__).warning("Error calculating operating status for mosque %s: %s", getattr(obj, "id", None), exc)
-            return {
-                "is_open": False,
-                "status_label": "Schedule Not Verified",
-                "current_window": None,
-                "closes_at": None,
-                "opens_at": None,
-                "next_prayer_name": None,
-                "next_prayer_time": None,
-            }
+            logging.getLogger(__name__).error(
+                "[FIELD_DIAGNOSTIC_FAILURE] MosqueID=%s MosqueName='%s' Field='operating_status' Exception=%s: %s",
+                getattr(obj, "id", None),
+                getattr(obj, "mosque_name", None),
+                type(exc).__name__,
+                exc,
+                exc_info=True,
+            )
+            raise exc
 
     def get_prayer_timing(self, obj) -> dict | None:
         try:
@@ -300,24 +323,42 @@ class MosqueListSerializer(serializers.ModelSerializer):
                 "updated_at": timing.updated_at if getattr(timing, "updated_at", None) else None,
             }
             return ResolvedPrayerTimingSerializer(payload).data
-        except (ValueError, TypeError, AttributeError, ZoneInfoNotFoundError) as exc:
+        except Exception as exc:
             import logging
-            logging.getLogger(__name__).warning("Error serializing prayer timing for mosque %s: %s", getattr(obj, "id", None), exc)
-            return None
-
+            logging.getLogger(__name__).error(
+                "[FIELD_DIAGNOSTIC_FAILURE] MosqueID=%s MosqueName='%s' Field='prayer_timing' Exception=%s: %s",
+                getattr(obj, "id", None),
+                getattr(obj, "mosque_name", None),
+                type(exc).__name__,
+                exc,
+                exc_info=True,
+            )
+            raise exc
 
     def get_distance(self, obj) -> float | None:
-        if hasattr(obj, "distance_val") and obj.distance_val is not None:
-            return obj.distance_val
+        try:
+            if hasattr(obj, "distance_val") and obj.distance_val is not None:
+                return obj.distance_val
 
-        user_lat = self.context.get("lat")
-        user_lon = self.context.get("lon")
-        if user_lat is not None and user_lon is not None and obj.latitude is not None and obj.longitude is not None:
-            try:
-                return calculate_haversine(user_lat, user_lon, obj.latitude, obj.longitude)
-            except (ValueError, TypeError):
-                pass
-        return None
+            user_lat = self.context.get("lat")
+            user_lon = self.context.get("lon")
+            if user_lat is not None and user_lon is not None and obj.latitude is not None and obj.longitude is not None:
+                try:
+                    return calculate_haversine(user_lat, user_lon, obj.latitude, obj.longitude)
+                except (ValueError, TypeError):
+                    pass
+            return None
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).error(
+                "[FIELD_DIAGNOSTIC_FAILURE] MosqueID=%s MosqueName='%s' Field='distance' Exception=%s: %s",
+                getattr(obj, "id", None),
+                getattr(obj, "mosque_name", None),
+                type(exc).__name__,
+                exc,
+                exc_info=True,
+            )
+            raise exc
 
 
 class MosqueDetailSerializer(MosqueListSerializer):
