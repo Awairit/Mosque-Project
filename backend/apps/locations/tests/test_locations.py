@@ -46,10 +46,11 @@ class LocationsAPITests(APITestCase):
         url = reverse("city-list")
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        # Verify it lists two seeded cities alphabetically (Nanded, Pune)
-        self.assertEqual(len(response.data["results"]), 2)
-        self.assertEqual(response.data["results"][0]["name"], "Nanded")
-        self.assertEqual(response.data["results"][1]["name"], "Pune")
+        # Verify it returns a list array of seeded cities alphabetically (Nanded, Pune)
+        self.assertIsInstance(response.data, list)
+        self.assertEqual(len(response.data), 2)
+        self.assertEqual(response.data[0]["name"], "Nanded")
+        self.assertEqual(response.data[1]["name"], "Pune")
 
     def test_get_city_timings_manual_selection_by_name(self):
         url = reverse("city-timings")

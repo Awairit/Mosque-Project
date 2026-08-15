@@ -9,6 +9,8 @@ from apps.mosques.models import Mosque, MosqueRegistrationRequest
 
 class SuperAdminAuthAndStatsTests(APITestCase):
     def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
         # Create superuser
         self.super_user = User.objects.create_superuser(
             username="superadmin",

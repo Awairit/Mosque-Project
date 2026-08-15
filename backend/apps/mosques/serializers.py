@@ -36,6 +36,7 @@ class MosquePhotoSerializer(serializers.ModelSerializer):
 class MosqueAnnouncementSerializer(serializers.ModelSerializer):
     city_name = serializers.CharField(source="city.name", read_only=True)
     mosque_name = serializers.CharField(source="mosque.mosque_name", read_only=True)
+    published_by = serializers.SerializerMethodField()
 
     class Meta:
         model = MosqueAnnouncement
@@ -58,13 +59,46 @@ class MosqueAnnouncementSerializer(serializers.ModelSerializer):
             "is_active",
             "created_at",
             "updated_at",
+            "published_by",
         )
-        read_only_fields = ("id", "created_at", "updated_at")
+        read_only_fields = ("id", "created_at", "updated_at", "published_by")
+
+    def get_published_by(self, obj) -> dict | None:
+        # Mosque-scoped content must not receive City Admin attribution
+        if obj.mosque_id is not None:
+            return None
+
+        user = obj.created_by
+        city_admin = None
+        if user and hasattr(user, "city_admin") and user.city_admin.is_active:
+            city_admin = user.city_admin
+        elif obj.city:
+            from apps.accounts.models import CityAdmin
+            city_admin = CityAdmin.objects.filter(city=obj.city, is_active=True).select_related("user").first()
+
+        if not city_admin and not (user and hasattr(user, "city_admin")):
+            return None
+
+        ca_user = city_admin.user if city_admin else user
+        full_name = f"{ca_user.first_name} {ca_user.last_name}".strip()
+        if not full_name:
+            full_name = ca_user.username
+
+        city_name = obj.city.name if obj.city else (city_admin.city.name if city_admin and city_admin.city else "")
+
+        return {
+            "name": full_name,
+            "role": "City Administrator",
+            "city": city_name,
+        }
 
 
 class MosqueEventSerializer(serializers.ModelSerializer):
     city_name = serializers.CharField(source="city.name", read_only=True)
     mosque_name = serializers.CharField(source="mosque.mosque_name", read_only=True)
+    published_by = serializers.SerializerMethodField()
+    temporal_status = serializers.SerializerMethodField()
+    organizer_name = serializers.SerializerMethodField()
 
     class Meta:
         model = MosqueEvent
@@ -90,8 +124,60 @@ class MosqueEventSerializer(serializers.ModelSerializer):
             "is_active",
             "created_at",
             "updated_at",
+            "published_by",
+            "temporal_status",
+            "organizer_name",
         )
-        read_only_fields = ("id", "created_at", "updated_at")
+        read_only_fields = ("id", "created_at", "updated_at", "published_by", "temporal_status", "organizer_name")
+
+    def get_temporal_status(self, obj) -> str:
+        from django.utils import timezone
+        from zoneinfo import ZoneInfo
+        tz_name = obj.city.timezone if (obj.city and obj.city.timezone) else "Asia/Kolkata"
+        tz = ZoneInfo(tz_name)
+        now = timezone.now().astimezone(tz)
+        
+        check_time = obj.end_time if obj.end_time else obj.event_time
+        event_dt = timezone.datetime.combine(obj.event_date, check_time).replace(tzinfo=tz)
+        if event_dt >= now:
+            return "upcoming"
+        return "completed"
+
+    def get_organizer_name(self, obj) -> str:
+        if obj.mosque:
+            return obj.mosque.mosque_name
+        if obj.city:
+            return f"{obj.city.name} City Administration"
+        return "City Administration"
+
+    def get_published_by(self, obj) -> dict | None:
+        # Mosque-scoped content must not receive City Admin attribution
+        if obj.mosque_id is not None:
+            return None
+
+        user = obj.created_by
+        city_admin = None
+        if user and hasattr(user, "city_admin") and user.city_admin.is_active:
+            city_admin = user.city_admin
+        elif obj.city:
+            from apps.accounts.models import CityAdmin
+            city_admin = CityAdmin.objects.filter(city=obj.city, is_active=True).select_related("user").first()
+
+        if not city_admin and not (user and hasattr(user, "city_admin")):
+            return None
+
+        ca_user = city_admin.user if city_admin else user
+        full_name = f"{ca_user.first_name} {ca_user.last_name}".strip()
+        if not full_name:
+            full_name = ca_user.username
+
+        city_name = obj.city.name if obj.city else (city_admin.city.name if city_admin and city_admin.city else "")
+
+        return {
+            "name": full_name,
+            "role": "City Administrator",
+            "city": city_name,
+        }
 
 
 class MosqueListSerializer(serializers.ModelSerializer):
@@ -148,69 +234,131 @@ class MosqueListSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_city(self, obj) -> str:
-        if obj.city_relation:
-            return obj.city_relation.name
-        return obj.city or ""
+        try:
+            if obj.city_relation:
+                return obj.city_relation.name
+            return obj.city or ""
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).error(
+                "[FIELD_DIAGNOSTIC_FAILURE] MosqueID=%s MosqueName='%s' Field='city' Exception=%s: %s",
+                getattr(obj, "id", None),
+                getattr(obj, "mosque_name", None),
+                type(exc).__name__,
+                exc,
+                exc_info=True,
+            )
+            raise exc
 
     def get_city_id(self, obj) -> int | None:
-        return obj.city_relation_id
+        try:
+            return obj.city_relation_id
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).error(
+                "[FIELD_DIAGNOSTIC_FAILURE] MosqueID=%s MosqueName='%s' Field='city_id' Exception=%s: %s",
+                getattr(obj, "id", None),
+                getattr(obj, "mosque_name", None),
+                type(exc).__name__,
+                exc,
+                exc_info=True,
+            )
+            raise exc
 
     def get_operating_status(self, obj) -> dict:
-        engine = MosqueAvailabilityEngine(obj)
-        return engine.get_availability()
+        try:
+            engine = MosqueAvailabilityEngine(obj)
+            return engine.get_availability()
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).error(
+                "[FIELD_DIAGNOSTIC_FAILURE] MosqueID=%s MosqueName='%s' Field='operating_status' Exception=%s: %s",
+                getattr(obj, "id", None),
+                getattr(obj, "mosque_name", None),
+                type(exc).__name__,
+                exc,
+                exc_info=True,
+            )
+            raise exc
 
     def get_prayer_timing(self, obj) -> dict | None:
-        from apps.prayers.services import CongregationTimingResolver
-        from apps.prayers.serializers import ResolvedPrayerTimingSerializer
-        from apps.prayers.models import PrayerTiming
-        from zoneinfo import ZoneInfo
-        from django.utils import timezone
-        
         try:
-            timing = obj.prayer_timing
-        except PrayerTiming.DoesNotExist:
-            return None
+            from apps.prayers.services import CongregationTimingResolver
+            from apps.prayers.serializers import ResolvedPrayerTimingSerializer
+            from apps.prayers.models import PrayerTiming
+            from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+            from django.utils import timezone
             
-        date_val = self.context.get("date")
-        if not date_val:
-            city = obj.city_relation
-            tz_name = city.timezone if (city and city.timezone) else "Asia/Kolkata"
-            date_val = timezone.now().astimezone(ZoneInfo(tz_name)).date()
-            
-        resolved = CongregationTimingResolver.resolve_prayer_timing(timing, date_val)
-        if not resolved:
-            return None
+            try:
+                timing = obj.prayer_timing
+            except (PrayerTiming.DoesNotExist, AttributeError):
+                return None
 
-        # Build a plain dict from the resolved dataclass, then add the ORM-level
-        # timestamp (already in memory via select_related — no extra DB query).
-        # We serialise via ResolvedPrayerTimingSerializer so field formatting
-        # (time format strings, date format, etc.) stays in one place.
-        payload = {
-            "fajr_time": resolved.fajr_time,
-            "dhuhr_time": resolved.dhuhr_time,
-            "asr_time": resolved.asr_time,
-            "maghrib_time": resolved.maghrib_time,
-            "isha_time": resolved.isha_time,
-            "jumuah_time": resolved.jumuah_time,
-            "effective_from": resolved.effective_from,
-            "maghrib_congregation_mode": resolved.maghrib_congregation_mode,
-            "updated_at": timing.updated_at if timing.updated_at else None,
-        }
-        return ResolvedPrayerTimingSerializer(payload).data
+            if not timing:
+                return None
 
+            date_val = self.context.get("date")
+            if not date_val:
+                city = obj.city_relation
+                tz_name = city.timezone if (city and city.timezone) else "Asia/Kolkata"
+                try:
+                    tz = ZoneInfo(tz_name)
+                except (ZoneInfoNotFoundError, KeyError, ValueError, TypeError):
+                    tz = ZoneInfo("Asia/Kolkata")
+                date_val = timezone.now().astimezone(tz).date()
+
+            resolved = CongregationTimingResolver.resolve_prayer_timing(timing, date_val)
+            if not resolved:
+                return None
+
+            payload = {
+                "fajr_time": resolved.fajr_time,
+                "dhuhr_time": resolved.dhuhr_time,
+                "asr_time": resolved.asr_time,
+                "maghrib_time": resolved.maghrib_time,
+                "isha_time": resolved.isha_time,
+                "jumuah_time": resolved.jumuah_time,
+                "effective_from": resolved.effective_from,
+                "maghrib_congregation_mode": resolved.maghrib_congregation_mode,
+                "updated_at": timing.updated_at if getattr(timing, "updated_at", None) else None,
+            }
+            return ResolvedPrayerTimingSerializer(payload).data
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).error(
+                "[FIELD_DIAGNOSTIC_FAILURE] MosqueID=%s MosqueName='%s' Field='prayer_timing' Exception=%s: %s",
+                getattr(obj, "id", None),
+                getattr(obj, "mosque_name", None),
+                type(exc).__name__,
+                exc,
+                exc_info=True,
+            )
+            raise exc
 
     def get_distance(self, obj) -> float | None:
-        if hasattr(obj, "distance_val") and obj.distance_val is not None:
-            return obj.distance_val
+        try:
+            if hasattr(obj, "distance_val") and obj.distance_val is not None:
+                return obj.distance_val
 
-        user_lat = self.context.get("lat")
-        user_lon = self.context.get("lon")
-        if user_lat is not None and user_lon is not None and obj.latitude is not None and obj.longitude is not None:
-            try:
-                return calculate_haversine(user_lat, user_lon, obj.latitude, obj.longitude)
-            except (ValueError, TypeError):
-                pass
-        return None
+            user_lat = self.context.get("lat")
+            user_lon = self.context.get("lon")
+            if user_lat is not None and user_lon is not None and obj.latitude is not None and obj.longitude is not None:
+                try:
+                    return calculate_haversine(user_lat, user_lon, obj.latitude, obj.longitude)
+                except (ValueError, TypeError):
+                    pass
+            return None
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).error(
+                "[FIELD_DIAGNOSTIC_FAILURE] MosqueID=%s MosqueName='%s' Field='distance' Exception=%s: %s",
+                getattr(obj, "id", None),
+                getattr(obj, "mosque_name", None),
+                type(exc).__name__,
+                exc,
+                exc_info=True,
+            )
+            raise exc
 
 
 class MosqueDetailSerializer(MosqueListSerializer):
@@ -301,6 +449,8 @@ class MosqueRegistrationRequestSerializer(serializers.ModelSerializer):
             "address",
             "google_maps_link",
             "google_maps_url",
+            "latitude",
+            "longitude",
             "women_prayer_available",
             "notes",
             "status",
@@ -358,6 +508,15 @@ class MosqueRegistrationRequestSerializer(serializers.ModelSerializer):
         elif url and not link:
             attrs["google_maps_link"] = url
 
+        # Auto-extract coordinates if missing
+        url_target = attrs.get("google_maps_url") or attrs.get("google_maps_link")
+        if url_target and (attrs.get("latitude") is None or attrs.get("longitude") is None):
+            from apps.mosques.services import extract_coordinates_from_url
+            lat, lon = extract_coordinates_from_url(url_target)
+            if lat is not None and lon is not None:
+                attrs["latitude"] = lat
+                attrs["longitude"] = lon
+
         duplicate_exists = MosqueRegistrationRequest.objects.filter(
             mosque_name__iexact=mosque_name,
             mobile_number=mobile_number,
@@ -373,6 +532,24 @@ class MosqueRegistrationRequestSerializer(serializers.ModelSerializer):
                 }
             )
 
+        # Authoritative City selection validation (RC-BUG-007)
+        from apps.locations.models import City
+        city_input = attrs.get("city", "").strip()
+        city_obj = None
+        if city_input:
+            import string
+            normalized = " ".join(city_input.split()).strip(string.punctuation).lower()
+            city_obj = City.objects.filter(name__iexact=normalized).first()
+            if not city_obj:
+                city_obj = City.objects.filter(name__icontains=normalized).first()
+
+        if not city_obj:
+            raise serializers.ValidationError(
+                {"city": "Please select a valid registered City from the platform city directory."}
+            )
+
+        attrs["city_relation"] = city_obj
+        attrs["city"] = city_obj.name
         return attrs
 
 
@@ -420,30 +597,28 @@ class MosqueProfileSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         from apps.locations.models import City
-        
-        if "city_relation_id" in attrs:
-            city_relation_id = attrs.get("city_relation_id")
-            if city_relation_id is not None:
-                try:
-                    city_obj = City.objects.get(id=city_relation_id)
-                    attrs["city"] = city_obj.name
-                except City.DoesNotExist:
-                    raise serializers.ValidationError({"city_id": "City with this ID does not exist."})
-            else:
-                attrs["city"] = ""
+
+        city_relation_id = attrs.get("city_relation_id")
+        if city_relation_id is not None:
+            try:
+                city_obj = City.objects.get(id=city_relation_id)
+                attrs["city_relation"] = city_obj
+                attrs["city"] = city_obj.name
+            except City.DoesNotExist:
+                raise serializers.ValidationError({"city": "City with this ID does not exist."})
         elif "city" in attrs:
-            city_name = attrs.get("city")
+            city_name = attrs.get("city", "").strip()
+            city_obj = None
             if city_name:
                 import string
                 normalized = " ".join(city_name.split()).strip(string.punctuation).lower()
                 city_obj = City.objects.filter(name__iexact=normalized).first()
                 if not city_obj:
                     city_obj = City.objects.filter(name__icontains=normalized).first()
-                if city_obj:
-                    attrs["city_relation"] = city_obj
-                    attrs["city"] = city_obj.name
-            else:
-                attrs["city_relation"] = None
+            if not city_obj:
+                raise serializers.ValidationError({"city": "Please select a valid registered City from the platform city directory."})
+            attrs["city_relation"] = city_obj
+            attrs["city"] = city_obj.name
                 
         return attrs
 
@@ -456,7 +631,10 @@ class MosqueOperatingScheduleSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "mosque",
+            "schedule_mode",
             "open_24_hours",
+            "general_open_time",
+            "general_close_time",
             "fajr_open",
             "fajr_close",
             "dhuhr_open",
@@ -480,6 +658,59 @@ class MosqueOperatingScheduleSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
+
+    def to_internal_value(self, data):
+        if isinstance(data, dict):
+            data = data.copy()
+            time_fields = (
+                "general_open_time",
+                "general_close_time",
+                "fajr_open",
+                "fajr_close",
+                "dhuhr_open",
+                "dhuhr_close",
+                "asr_open",
+                "asr_close",
+                "maghrib_open",
+                "maghrib_close",
+                "isha_open",
+                "isha_close",
+            )
+            for field in time_fields:
+                if field in data and (data[field] == "" or data[field] is None or (isinstance(data[field], str) and not data[field].strip())):
+                    data[field] = None
+        return super().to_internal_value(data)
+
+    def validate(self, attrs):
+        schedule_mode = attrs.get(
+            "schedule_mode",
+            getattr(self.instance, "schedule_mode", "SALAH_BASED") if self.instance else "SALAH_BASED"
+        )
+        open_24 = attrs.get("open_24_hours", None)
+
+        if schedule_mode == "24_HOURS" or open_24 is True:
+            attrs["schedule_mode"] = "24_HOURS"
+            attrs["open_24_hours"] = True
+        elif schedule_mode == "GENERAL":
+            attrs["open_24_hours"] = False
+            gen_open = attrs.get(
+                "general_open_time",
+                getattr(self.instance, "general_open_time", None) if self.instance else None
+            )
+            gen_close = attrs.get(
+                "general_close_time",
+                getattr(self.instance, "general_close_time", None) if self.instance else None
+            )
+            if not gen_open or not gen_close:
+                raise serializers.ValidationError(
+                    "Opening and closing times are required for General Open-Close operating mode."
+                )
+        elif schedule_mode == "SALAH_BASED":
+            attrs["open_24_hours"] = False
+
+        return attrs
+
+
 
 
 class CommunityScheduleSerializer(serializers.ModelSerializer):

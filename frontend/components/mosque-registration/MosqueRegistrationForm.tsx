@@ -94,7 +94,7 @@ function InputField({
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
         inputMode={inputMode}
-        autoComplete={autoComplete}
+        autoComplete={autoComplete || "off"}
         placeholder={placeholder}
         className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 px-4 text-slate-950 outline-none transition focus:border-emerald-900 focus:ring-4 focus:ring-emerald-900/10 disabled:bg-slate-50 disabled:text-slate-400"
       />
@@ -159,9 +159,28 @@ export function MosqueRegistrationForm() {
   const [errors, setErrors] = useState<FieldErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Authoritative Cities state
+  const [cities, setCities] = useState<{ id: number; name: string }[]>([]);
+
   // OTP state
   const [otp, setOtp] = useState("");
   const [verificationToken, setVerificationToken] = useState("");
+
+  useEffect(() => {
+    async function loadCities() {
+      try {
+        const res = await apiRequest<{ id: number; name: string }[]>({ path: "/locations/cities/" });
+        const list = Array.isArray(res) ? res : (res as any)?.results || [];
+        setCities(list);
+        if (list.length > 0 && !form.city) {
+          setForm((f) => ({ ...f, city: list[0].name }));
+        }
+      } catch {
+        // Fallback gracefully
+      }
+    }
+    loadCities();
+  }, []);
 
   const updateField = <K extends keyof FormData>(key: K, value: FormData[K]) => {
     setForm((f) => ({ ...f, [key]: value }));
@@ -174,6 +193,7 @@ export function MosqueRegistrationForm() {
     const nextErrors: FieldErrors = {};
     if (!form.mosque_name.trim()) nextErrors.mosque_name = "Mosque name is required.";
     if (!form.mobile_number.trim()) nextErrors.mobile_number = "WhatsApp number is required.";
+    if (!form.city.trim()) nextErrors.city = "Please select a registered city.";
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
       return;
@@ -223,22 +243,28 @@ export function MosqueRegistrationForm() {
 
   const handleVerifyAndSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (otp.length !== 6) {
-      setErrors({ otp: "Please enter the 6-digit code." });
-      return;
-    }
-
     setIsSubmitting(true);
     setErrors({});
 
     try {
-      // 1. Verify OTP → get verification_token
-      const verifyRes = await apiRequest<{ verification_token: string }>({
-        path: "/mosque-registration/otp/verify/",
-        method: "POST",
-        body: JSON.stringify({ mobile_number: form.mobile_number, otp }),
-      });
-      const token = verifyRes.verification_token;
+      let token = verificationToken;
+
+      // Only verify OTP with backend if we don't already hold a valid verificationToken
+      if (!token) {
+        if (otp.length !== 6) {
+          setErrors({ otp: "Please enter the 6-digit code." });
+          setIsSubmitting(false);
+          return;
+        }
+
+        const verifyRes = await apiRequest<{ verification_token: string }>({
+          path: "/mosque-registration/otp/verify/",
+          method: "POST",
+          body: JSON.stringify({ mobile_number: form.mobile_number, otp }),
+        });
+        token = verifyRes.verification_token;
+        setVerificationToken(token);
+      }
 
       // 2. Submit registration with verification_token attached
       await apiRequest({
@@ -247,19 +273,25 @@ export function MosqueRegistrationForm() {
         body: JSON.stringify({ ...form, verification_token: token }),
       });
 
-      setVerificationToken(token);
       setStep(3);
     } catch (err: any) {
       if (err instanceof ApiError && err.details) {
         const e: FieldErrors = {};
+        let hasStep1Error = false;
         for (const [k, v] of Object.entries(err.details as Record<string, unknown>)) {
-          e[k as keyof FieldErrors] = Array.isArray(v) ? v[0] : String(v);
+          const val = Array.isArray(v) ? v[0] : String(v);
+          e[k as keyof FieldErrors] = val;
+          if (["mosque_name", "admin_name", "mobile_number", "email", "city", "address"].includes(k)) {
+            hasStep1Error = true;
+          }
         }
-        // Map non_field_errors to otp field for OTP step
-        if (e.non_field_errors && step === 2) {
+        if (e.non_field_errors && step === 2 && !verificationToken) {
           e.otp = e.non_field_errors;
         }
         setErrors(e);
+        if (hasStep1Error) {
+          setStep(1);
+        }
       } else {
         setErrors({ non_field_errors: "Something went wrong. Please try again." });
       }
@@ -377,14 +409,27 @@ export function MosqueRegistrationForm() {
             <FieldError message={errors.email} />
           </div>
 
-          <InputField
-            id="city"
-            label="City"
-            value={form.city}
-            onChange={(v) => updateField("city", v)}
-            autoComplete="address-level2"
-            error={errors.city}
-          />
+          <div>
+            <label htmlFor="city" className="block text-sm font-semibold text-slate-900">
+              City <span className="text-red-600">*</span>
+            </label>
+            <p className="mt-0.5 text-xs text-slate-500">Select an authoritative registered city from the directory.</p>
+            <select
+              id="city"
+              name="city"
+              value={form.city}
+              onChange={(e) => updateField("city", e.target.value)}
+              className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 px-4 text-slate-950 outline-none transition focus:border-emerald-900 focus:ring-4 focus:ring-emerald-900/10 bg-white"
+            >
+              <option value="">Select City</option>
+              {cities.map((c) => (
+                <option key={c.id} value={c.name}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <FieldError message={errors.city} />
+          </div>
 
           <div>
             <label htmlFor="address" className="block text-sm font-semibold text-slate-900">Address</label>

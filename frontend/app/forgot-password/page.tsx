@@ -339,15 +339,16 @@ export default function ForgotPasswordPage() {
                     Login
                   </Link>
                 </div>
-                <div className="border-t border-slate-100 pt-3">
-                  Lost access to both WhatsApp and email?{" "}
+                <div className="border-t border-slate-100 pt-3 text-xs text-slate-500">
+                  Lost access to your registered mobile number?{" "}
                   <Link
                     href="/account-recovery"
-                    className="font-semibold text-slate-700 hover:underline"
+                    className="font-semibold text-emerald-900 hover:underline"
                   >
-                    Account Recovery
+                    Contact Super Admin for Manual Identity Recovery
                   </Link>
                 </div>
+
               </div>
             )}
           </div>

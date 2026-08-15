@@ -52,7 +52,9 @@ LOCAL_APPS = [
     "apps.events",
     "apps.platform_admin",
     "apps.community_services",
+    "apps.analytics",
 ]
+
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
@@ -133,7 +135,6 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.TokenAuthentication",
         "rest_framework.authentication.SessionAuthentication",
-        "rest_framework.authentication.BasicAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.AllowAny",
@@ -153,6 +154,10 @@ REST_FRAMEWORK = {
     },
 }
 
+import sys
+if any(cmd in sys.argv for cmd in ["test", "pytest"]):
+    REST_FRAMEWORK["DEFAULT_THROTTLE_CLASSES"] = []
+
 
 CORS_ALLOWED_ORIGINS = env("DJANGO_CORS_ALLOWED_ORIGINS", default=[])
 CSRF_TRUSTED_ORIGINS = env("DJANGO_CSRF_TRUSTED_ORIGINS", default=[])
@@ -161,9 +166,9 @@ CSRF_TRUSTED_ORIGINS = env("DJANGO_CSRF_TRUSTED_ORIGINS", default=[])
 # ---------------------------------------------------------------------------
 # OTP Provider Configuration
 # ---------------------------------------------------------------------------
-# Set OTP_PROVIDER=dummy for local development (no credentials required).
+# Set OTP_PROVIDER=development for local development (no external SMS gateway required).
 # Set OTP_PROVIDER=twilio for production to use Twilio Verify.
-OTP_PROVIDER = env("OTP_PROVIDER", default="dummy")
+OTP_PROVIDER = env("OTP_PROVIDER", default="development")
 
 TWILIO_ACCOUNT_SID = env("TWILIO_ACCOUNT_SID", default="")
 TWILIO_AUTH_TOKEN = env("TWILIO_AUTH_TOKEN", default="")

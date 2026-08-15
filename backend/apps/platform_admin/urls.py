@@ -16,6 +16,20 @@ from apps.platform_admin.views import (
     SuperAdminCityDetailAPIView,
     SuperAdminCityTimetableAPIView,
     SuperAdminCityTimetableAcknowledgeAPIView,
+    SuperAdminCityAdminListCreateAPIView,
+    SuperAdminCityAdminDetailAPIView,
+    SuperAdminCityAdminResetPasswordAPIView,
+    SuperAdminCityAdminMobileChangeAPIView,
+    SuperAdminCityAdminMobileVerifyAPIView,
+    SuperAdminCityAdminAssignMosqueAPIView,
+    SuperAdminMosqueListAPIView,
+    SuperAdminMosqueStatusAPIView,
+    SuperAdminMosqueDeleteAPIView,
+    SuperAdminAccountRecoveryListAPIView,
+    SuperAdminAccountRecoveryDetailAPIView,
+    SuperAdminAccountRecoveryApproveAPIView,
+    SuperAdminAccountRecoveryRejectAPIView,
+    SuperAdminAccountRecoveryReopenAPIView,
 )
 
 urlpatterns = [
@@ -32,4 +46,20 @@ urlpatterns = [
     path("cities/<int:pk>/", SuperAdminCityDetailAPIView.as_view(), name="platform-admin-cities-detail"),
     path("cities/<int:pk>/timetables/<str:action>/", SuperAdminCityTimetableAPIView.as_view(), name="platform-admin-cities-timetables"),
     path("cities/<int:pk>/timetables-acknowledge/", SuperAdminCityTimetableAcknowledgeAPIView.as_view(), name="platform-admin-cities-timetables-acknowledge"),
+    path("city-admins/", SuperAdminCityAdminListCreateAPIView.as_view(), name="platform-admin-city-admins-list"),
+    path("city-admins/<int:pk>/", SuperAdminCityAdminDetailAPIView.as_view(), name="platform-admin-city-admins-detail"),
+    path("city-admins/<int:pk>/reset-password/", SuperAdminCityAdminResetPasswordAPIView.as_view(), name="platform-admin-city-admins-reset-password"),
+    path("city-admins/<int:pk>/change-mobile/", SuperAdminCityAdminMobileChangeAPIView.as_view(), name="platform-admin-city-admins-change-mobile"),
+    path("city-admins/<int:pk>/verify-mobile/", SuperAdminCityAdminMobileVerifyAPIView.as_view(), name="platform-admin-city-admins-verify-mobile"),
+    path("city-admins/<int:pk>/assign-mosque/", SuperAdminCityAdminAssignMosqueAPIView.as_view(), name="platform-admin-city-admins-assign-mosque"),
+    path("mosques/", SuperAdminMosqueListAPIView.as_view(), name="platform-admin-mosques-list"),
+    path("mosques/<int:pk>/status/", SuperAdminMosqueStatusAPIView.as_view(), name="platform-admin-mosques-status"),
+    path("mosques/<int:pk>/", SuperAdminMosqueDeleteAPIView.as_view(), name="platform-admin-mosques-delete"),
+    path("account-recovery/", SuperAdminAccountRecoveryListAPIView.as_view(), name="platform-admin-recovery-list"),
+    path("account-recovery/<int:pk>/", SuperAdminAccountRecoveryDetailAPIView.as_view(), name="platform-admin-recovery-detail"),
+    path("account-recovery/<int:pk>/approve/", SuperAdminAccountRecoveryApproveAPIView.as_view(), name="platform-admin-recovery-approve"),
+    path("account-recovery/<int:pk>/reject/", SuperAdminAccountRecoveryRejectAPIView.as_view(), name="platform-admin-recovery-reject"),
+    path("account-recovery/<int:pk>/reopen/", SuperAdminAccountRecoveryReopenAPIView.as_view(), name="platform-admin-recovery-reopen"),
 ]
+
+

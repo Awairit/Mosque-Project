@@ -18,9 +18,14 @@ type FormState = {
 
 type LoginResponse = {
   token: string;
-  mobile_number: string;
-  mosque_id: number;
-  mosque_name: string;
+  mobile_number?: string;
+  username?: string;
+  role: "mosque_admin" | "city_admin" | "super_admin";
+  roles?: string[];
+  mosque_id?: number;
+  mosque_name?: string;
+  city_id?: number;
+  city_name?: string;
   must_change_password?: boolean;
 };
 
@@ -110,18 +115,51 @@ export function LoginForm() {
         body: JSON.stringify(form),
       });
 
-      // Save token and metadata in localStorage
-      localStorage.setItem("auth_token", response.token);
-      localStorage.setItem("admin_mobile", response.mobile_number);
-      localStorage.setItem("admin_mosque_id", String(response.mosque_id));
-      localStorage.setItem("admin_mosque_name", response.mosque_name);
+      const role = response.role || "mosque_admin";
+      localStorage.setItem("user_role", role);
+      if (response.roles) {
+        localStorage.setItem("user_roles", JSON.stringify(response.roles));
+      } else {
+        localStorage.setItem("user_roles", JSON.stringify([role]));
+      }
 
-      // Route to dashboard
+      if (role === "city_admin") {
+        localStorage.setItem("auth_token", response.token);
+        if (response.mobile_number) localStorage.setItem("city_admin_mobile", response.mobile_number);
+        if (response.city_id) localStorage.setItem("city_admin_city_id", String(response.city_id));
+        if (response.city_name) localStorage.setItem("city_admin_city_name", response.city_name);
+        if (response.mosque_id) {
+          localStorage.setItem("admin_mosque_id", String(response.mosque_id));
+        } else {
+          localStorage.removeItem("admin_mosque_id");
+        }
+        if (response.mosque_name) {
+          localStorage.setItem("admin_mosque_name", response.mosque_name);
+        } else {
+          localStorage.removeItem("admin_mosque_name");
+        }
+      } else if (role === "super_admin") {
+        localStorage.setItem("super_auth_token", response.token);
+        if (response.username) localStorage.setItem("super_username", response.username);
+      } else {
+        localStorage.setItem("auth_token", response.token);
+        if (response.mobile_number) localStorage.setItem("admin_mobile", response.mobile_number);
+        if (response.mosque_id) localStorage.setItem("admin_mosque_id", String(response.mosque_id));
+        if (response.mosque_name) localStorage.setItem("admin_mosque_name", response.mosque_name);
+      }
+
       if (response.must_change_password) {
         localStorage.setItem("must_change_password", "true");
         router.push("/change-password");
+        return;
+      }
+      localStorage.removeItem("must_change_password");
+
+      if (role === "city_admin") {
+        router.push("/city-admin/dashboard");
+      } else if (role === "super_admin") {
+        router.push("/super-admin/dashboard");
       } else {
-        localStorage.removeItem("must_change_password");
         router.push("/dashboard");
       }
     } catch (error) {
@@ -130,6 +168,7 @@ export function LoginForm() {
       setIsSubmitting(false);
     }
   };
+
 
   return (
     <form

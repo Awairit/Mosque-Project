@@ -6,7 +6,10 @@ import Link from "next/link";
 import { apiRequest } from "@/lib/api/client";
 import { getPreviewFacilities } from "@/lib/constants/facilities";
 
+import { formatTimeTo12Hour } from "@/lib/utils/formatters";
+
 type TimingRow = {
+
   date: string;
   fajr: string;
   sunrise: string;
@@ -38,6 +41,12 @@ type CityTimings = {
   };
 };
 
+type PublisherAttribution = {
+  name: string;
+  role: string;
+  city: string;
+};
+
 type Announcement = {
   id: number;
   title: string;
@@ -46,6 +55,7 @@ type Announcement = {
   priority: string;
   announcement_type: string;
   publish_date?: string;
+  published_by?: PublisherAttribution | null;
 };
 
 type Event = {
@@ -58,6 +68,8 @@ type Event = {
   end_time?: string;
   event_location?: string;
   speaker_name?: string;
+  organizer_name?: string;
+  published_by?: PublisherAttribution | null;
 };
 
 type MosquePreview = {
@@ -300,6 +312,11 @@ export default function CityPublicPage() {
                     </div>
                     <h4 className="font-bold text-xs">{ann.title}</h4>
                     <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">{ann.short_summary || ann.content}</p>
+                    {ann.published_by && ann.published_by.name && (
+                      <p className="text-[10px] text-slate-400 font-medium mt-1 border-t border-slate-100 pt-1">
+                        Published by <span className="font-semibold text-slate-600">{ann.published_by.name}</span> ({ann.published_by.role}{ann.published_by.city ? ` — ${ann.published_by.city}` : ""})
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -322,8 +339,17 @@ export default function CityPublicPage() {
                       <span className="text-[10px] text-slate-400 font-medium">{evt.event_date}</span>
                     </div>
                     <h4 className="font-bold text-xs mt-1.5">{evt.title}</h4>
+                    <p className="text-[11px] text-slate-500 mt-0.5 font-medium">
+                      ⏰ Time: {formatTimeTo12Hour(evt.event_time)}{evt.end_time ? ` - ${formatTimeTo12Hour(evt.end_time)}` : ""}
+                    </p>
                     <p className="text-[11px] text-slate-500 mt-0.5">{evt.speaker_name && `Speaker: ${evt.speaker_name}`}</p>
                     <p className="text-[11px] text-slate-500 mt-0.5">{evt.event_location && `Location: ${evt.event_location}`}</p>
+                    <div className="text-[10px] text-slate-400 font-medium mt-2 border-t border-slate-100 pt-1 space-y-0.5">
+                      <div>Organized by: <span className="font-semibold text-slate-600">{evt.organizer_name || "City Administration"}</span></div>
+                      {evt.published_by && evt.published_by.name && (
+                        <div>Posted by: <span className="font-semibold text-slate-600">{evt.published_by.name}</span> ({evt.published_by.role}{evt.published_by.city ? ` — ${evt.published_by.city}` : ""})</div>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

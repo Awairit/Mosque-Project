@@ -100,6 +100,12 @@ type Prayer = {
   isNext?: boolean;
 };
 
+type PublisherAttribution = {
+  name: string;
+  role: string;
+  city: string;
+};
+
 type Announcement = {
   id: number;
   title: string;
@@ -109,6 +115,7 @@ type Announcement = {
   announcement_type: string;
   banner_image?: string;
   publish_date?: string;
+  published_by?: PublisherAttribution | null;
 };
 
 type Event = {
@@ -121,6 +128,8 @@ type Event = {
   end_time?: string;
   event_location?: string;
   speaker_name?: string;
+  organizer_name?: string;
+  published_by?: PublisherAttribution | null;
 };
 
 
@@ -1004,6 +1013,16 @@ export function HomeHero() {
                     <p className="mt-2 text-xs text-slate-500 whitespace-pre-wrap">
                       {item.content}
                     </p>
+                    {item.published_by && item.published_by.name && (
+                      <div className="mt-3 border-t border-slate-100 pt-2 text-[11px] text-slate-500 font-medium flex items-center justify-between">
+                        <span>
+                          Published by <strong className="font-semibold text-slate-700">{item.published_by.name}</strong>
+                        </span>
+                        <span className="text-slate-400 font-normal">
+                          {item.published_by.role}{item.published_by.city ? ` — ${item.published_by.city}` : ""}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1070,12 +1089,24 @@ export function HomeHero() {
                         <span className="font-semibold text-slate-700">Date:</span> {event.event_date}
                       </div>
                       <div>
-                        <span className="font-semibold text-slate-700">Time:</span> {event.event_time}
-                        {event.end_time && ` - ${event.end_time}`}
+                        <span className="font-semibold text-slate-700">Time:</span> {formatTimeTo12Hour(event.event_time)}
+                        {event.end_time && ` - ${formatTimeTo12Hour(event.end_time)}`}
                       </div>
                       {event.event_location && (
                         <div className="col-span-2">
                           <span className="font-semibold text-slate-700">Location:</span> {event.event_location}
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-2 border-t border-slate-100 pt-2 text-[11px] text-slate-500 space-y-0.5">
+                      <div>
+                        <span className="text-slate-400 font-normal">Organized by:</span>{" "}
+                        <span className="font-semibold text-slate-700">{event.organizer_name || "City Administration"}</span>
+                      </div>
+                      {event.published_by && event.published_by.name && (
+                        <div>
+                          <span className="text-slate-400 font-normal">Posted by:</span>{" "}
+                          <span className="font-semibold text-slate-700">{event.published_by.name}</span> · {event.published_by.role}, {event.published_by.city}
                         </div>
                       )}
                     </div>

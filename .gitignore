@@ -146,14 +146,34 @@ CLAUDE.md
 # AI-generated audit, review, and orchestration markdown files
 # These were produced by AI agents during development and are not
 # required to build, run, test, or deploy the application.
+API_CONTRACT_AUDIT.md
 ARCHITECTURE_REVIEW_V2.md
+AUDIT_DATA_INTEGRITY.md
+AUDIT_FRONTEND_PERFORMANCE.md
+AUDIT_PERFORMANCE.md
+AUDIT_RECONCILIATION.md
+AUDIT_SECURITY.md
+AUDIT_TEST_MATRIX.md
+AUDIT_TEST_PLAN.md
+AUDIT_VERIFICATION_REPORT.md
+COMPLETE_SYSTEM_AUDIT.md
+CONCURRENCY_AUDIT.md
+DSA_ALGORITHM_AUDIT.md
+FINAL_RELEASE_CANDIDATE_FINDINGS.md
+FRONTEND_PERFORMANCE_AUDIT.md
 MASTER_PROJECT_STATUS_REPORT.md
 MASTER_PROJECT_STATUS_REPORT_V2.md
+MASTER_SYSTEM_AUDIT.md
 NEXT_PHASE_RECOMMENDATION.md
+OBSERVABILITY_AUDIT.md
 PHASE7_FOUNDATION_REVIEW.md
 PRODUCTION_LAUNCH_REVIEW.md
+PRODUCTION_READINESS_AUDIT.md
 PROJECT_AUDIT.md
+SECURITY_AUDIT.md
+STATE_MACHINE_AUDIT.md
 TECHNICAL_DEBT_REGISTER.md
+TEST_COVERAGE_AUDIT.md
 implementation_plan.md
 walkthrough.md
 task.md
@@ -171,6 +191,7 @@ Mosques Project Related pics and docs/
 # =============================================================================
 tmp/
 temp/
+tmp_imports/
 *.tmp
 *.bak
 *.orig

@@ -86,15 +86,15 @@ export function PhoneInput({
       )}
       {hint && <p className="text-xs text-slate-500">{hint}</p>}
 
-      <div className="flex gap-2 w-full">
+      <div className="flex gap-2 w-full min-w-0">
         {/* Country Selector Dropdown Overlay */}
-        <div className="relative flex items-center rounded-xl border border-slate-200 bg-white px-2 focus-within:border-emerald-900 focus-within:ring-4 focus-within:ring-emerald-900/10 transition dark:border-slate-800 dark:bg-slate-950">
+        <div className="relative flex items-center min-h-12 h-12 w-[125px] flex-shrink-0 rounded-xl border border-slate-200 bg-white px-2 focus-within:border-emerald-900 focus-within:ring-4 focus-within:ring-emerald-900/10 transition dark:border-slate-800 dark:bg-slate-950">
           <span className="text-lg mr-1 select-none">{selectedCountry.flag}</span>
           <select
             value={selectedCountry.code}
             onChange={handleCountryChange}
             disabled={disabled}
-            className="bg-transparent text-sm font-semibold text-slate-900 outline-none pr-3 py-3 cursor-pointer disabled:cursor-not-allowed disabled:text-slate-400 dark:text-slate-100"
+            className="bg-transparent text-sm font-semibold text-slate-900 outline-none w-full truncate cursor-pointer disabled:cursor-not-allowed disabled:text-slate-400 dark:text-slate-100"
           >
             {COUNTRIES.map((c) => (
               <option key={c.code} value={c.code} className="dark:bg-slate-950 dark:text-slate-100">
@@ -114,7 +114,7 @@ export function PhoneInput({
           placeholder={selectedCountry.placeholder}
           inputMode="tel"
           autoComplete="tel"
-          className="min-h-12 flex-1 rounded-xl border border-slate-200 px-4 text-slate-950 outline-none transition focus:border-emerald-900 focus:ring-4 focus:ring-emerald-900/10 disabled:bg-slate-50 disabled:text-slate-400 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-emerald-800"
+          className="min-h-12 h-12 flex-1 min-w-0 rounded-xl border border-slate-200 px-4 text-slate-950 outline-none transition focus:border-emerald-900 focus:ring-4 focus:ring-emerald-900/10 disabled:bg-slate-50 disabled:text-slate-400 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-emerald-800"
         />
       </div>
 

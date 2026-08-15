@@ -18,8 +18,15 @@ import {
   List, 
   Copy, 
   Archive, 
-  Send 
+  Send,
+  Building2,
+  Shield,
+  User,
+  Phone,
+  KeyRound,
+  Lock
 } from "lucide-react";
+
 import { apiRequest } from "@/lib/api/client";
 
 type Stats = {
@@ -60,6 +67,12 @@ type Announcement = {
   is_active: boolean;
 };
 
+type PublisherAttribution = {
+  name: string;
+  role: string;
+  city: string;
+};
+
 type Event = {
   id: number;
   title: string;
@@ -74,7 +87,37 @@ type Event = {
   max_capacity: number;
   organizer: string;
   status: string;
+  temporal_status?: "upcoming" | "completed";
+  organizer_name?: string;
+  published_by?: PublisherAttribution | null;
 };
+
+type ProfileData = {
+  id: number;
+  username: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  mobile_number: string;
+  city_id: number;
+  city_name: string;
+  is_active: boolean;
+  must_change_password: boolean;
+};
+
+function formatTimeTo12Hour(timeStr: string): string {
+  if (!timeStr) return "";
+  const parts = timeStr.split(":");
+  if (parts.length < 2) return timeStr;
+  let hours = parseInt(parts[0], 10);
+  const minutes = parts[1];
+  if (isNaN(hours)) return timeStr;
+  const ampm = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12;
+  if (hours === 0) hours = 12;
+  const formattedHours = hours < 10 ? `0${hours}` : `${hours}`;
+  return `${formattedHours}:${minutes} ${ampm}`;
+}
 
 export default function CityAdminDashboard() {
   const router = useRouter();
@@ -82,27 +125,49 @@ export default function CityAdminDashboard() {
   const [cityName, setCityName] = useState<string>("");
   const [cityId, setCityId] = useState<string>("");
 
-  const [activeTab, setActiveTab] = useState<"overview" | "announcements" | "events" | "notifications">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "mosques" | "announcements" | "events" | "my_mosque" | "account">("overview");
+  const [hasMosqueAdmin, setHasMosqueAdmin] = useState(false);
+  const [mosqueName, setMosqueName] = useState("");
+  const [mosqueId, setMosqueId] = useState("");
 
   // Loading States
   const [loadingStats, setLoadingStats] = useState(true);
   const [loadingAnnouncements, setLoadingAnnouncements] = useState(false);
   const [loadingEvents, setLoadingEvents] = useState(false);
+  const [loadingMosques, setLoadingMosques] = useState(false);
 
   // Stats Data
   const [stats, setStats] = useState<Stats | null>(null);
+  const [cityAnalytics, setCityAnalytics] = useState<{
+    total_visits: number;
+    unique_identified_visitors: number;
+    period_metrics: { today: number; this_week: number; this_month: number };
+    top_mosques: Array<{ mosque_id: number; mosque_name: string; views: number }>;
+  } | null>(null);
 
   // List Data
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
+  const [cityMosques, setCityMosques] = useState<any[]>([]);
+
+  // Profile State
+  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [profileForm, setProfileForm] = useState({ first_name: "", last_name: "", email: "" });
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  // Password Change State
+  const [passwordForm, setPasswordForm] = useState({ current_password: "", new_password: "", confirm_password: "" });
+  const [savingPassword, setSavingPassword] = useState(false);
+
+  // Mobile Change State
+  const [mobileStep, setMobileStep] = useState<"request" | "verify">("request");
+  const [mobileForm, setMobileForm] = useState({ current_password: "", new_mobile_number: "", otp_code: "" });
+  const [savingMobile, setSavingMobile] = useState(false);
 
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [filterPriority, setFilterPriority] = useState("all");
-
-  // Selected Items for Bulk Actions
-  const [selectedAnnouncements, setSelectedAnnouncements] = useState<number[]>([]);
 
   // Modal States
   const [isAnnouncementModalOpen, setIsAnnouncementModalOpen] = useState(false);
@@ -113,7 +178,7 @@ export default function CityAdminDashboard() {
     content: "",
     priority: "normal",
     announcement_type: "general",
-    status: "draft",
+    status: "published",
     start_date: new Date().toISOString().split("T")[0],
     end_date: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString().split("T")[0],
   });
@@ -125,8 +190,8 @@ export default function CityAdminDashboard() {
     description: "",
     event_type: "lecture",
     event_date: new Date().toISOString().split("T")[0],
-    event_time: "18:00:00",
-    end_time: "19:30:00",
+    event_time: "18:00",
+    end_time: "19:30",
     event_location: "",
     speaker_name: "",
     registration_required: false,
@@ -135,16 +200,6 @@ export default function CityAdminDashboard() {
     status: "published",
   });
 
-  // Calendar/List View Toggle for Events
-  const [eventsViewMode, setEventsViewMode] = useState<"list" | "calendar">("list");
-
-  // Custom Notification Dispatch Form
-  const [notifChannel, setNotifChannel] = useState("whatsapp");
-  const [notifRecipient, setNotifRecipient] = useState("");
-  const [notifMessage, setNotifMessage] = useState("");
-  const [sendingNotif, setSendingNotif] = useState(false);
-
-  // Toast notifications
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const showToast = (message: string, type: "success" | "error") => {
@@ -152,59 +207,131 @@ export default function CityAdminDashboard() {
     setTimeout(() => setToast(null), 4000);
   };
 
-  // Auth Validation
   useEffect(() => {
     const savedToken = localStorage.getItem("auth_token");
     const role = localStorage.getItem("user_role");
     const city = localStorage.getItem("city_admin_city_name");
     const cId = localStorage.getItem("city_admin_city_id");
+    const rolesStr = localStorage.getItem("user_roles");
+    const roles: string[] = rolesStr ? JSON.parse(rolesStr) : [];
+    const mId = localStorage.getItem("admin_mosque_id");
+    const mName = localStorage.getItem("admin_mosque_name");
 
-    if (!savedToken || role !== "city_admin") {
-      router.push("/city-admin/login");
+    if (!savedToken) {
+      router.push("/login");
+      return;
+    }
+    if (role === "mosque_admin" && !roles.includes("city_admin")) {
+      router.push("/dashboard");
+      return;
+    }
+    if (role === "super_admin") {
+      router.push("/super-admin/dashboard");
       return;
     }
 
     setToken(savedToken);
     setCityName(city || "Assigned City");
     setCityId(cId || "");
+
+    const isDual = roles.includes("mosque_admin") || (!!mId && mId !== "undefined");
+    setHasMosqueAdmin(isDual);
+    if (mId && mId !== "undefined") setMosqueId(mId);
+    if (mName && mName !== "undefined") setMosqueName(mName);
   }, [router]);
 
-  // Load Dashboard Stats
+
   const loadStats = async () => {
     try {
       setLoadingStats(true);
       const data = await apiRequest<Stats>({ path: "/city-admin/stats/" });
       setStats(data);
-    } catch (err) {
+    } catch {
       showToast("Failed to load dashboard statistics.", "error");
     } finally {
       setLoadingStats(false);
     }
   };
 
-  // Load Announcements
   const loadAnnouncements = async () => {
     try {
       setLoadingAnnouncements(true);
       const data = await apiRequest<any>({ path: `/city-admin/announcements/` });
       setAnnouncements(data.results || data);
-    } catch (err) {
-      showToast("Failed to load announcements list.", "error");
+    } catch {
+      showToast("Failed to load city notices list.", "error");
     } finally {
       setLoadingAnnouncements(false);
     }
   };
 
-  // Load Events
   const loadEvents = async () => {
     try {
       setLoadingEvents(true);
       const data = await apiRequest<any>({ path: `/city-admin/events/` });
       setEvents(data.results || data);
-    } catch (err) {
+    } catch {
       showToast("Failed to load events list.", "error");
     } finally {
       setLoadingEvents(false);
+    }
+  };
+
+  const loadCityMosques = async () => {
+    try {
+      setLoadingMosques(true);
+      const data = await apiRequest<any>({ path: "/city-admin/mosques/" });
+      setCityMosques(data.results || data);
+    } catch {
+      showToast("Failed to load city mosques.", "error");
+    } finally {
+      setLoadingMosques(false);
+    }
+  };
+
+  const loadCityAnalytics = async () => {
+    try {
+      const data = await apiRequest<any>({ path: "/analytics/city-admin/" });
+      setCityAnalytics(data);
+    } catch {
+      // analytics fallback silently
+    }
+  };
+
+  const loadProfile = async () => {
+    try {
+      const data = await apiRequest<any>({ path: "/city-admin/profile/" });
+      setProfile(data);
+      setProfileForm({
+        first_name: data.first_name || "",
+        last_name: data.last_name || "",
+        email: data.email || "",
+      });
+      if (data.has_mosque_admin) {
+        setHasMosqueAdmin(true);
+        if (data.mosque_id) {
+          setMosqueId(String(data.mosque_id));
+          localStorage.setItem("admin_mosque_id", String(data.mosque_id));
+        }
+        if (data.mosque_name) {
+          setMosqueName(data.mosque_name);
+          localStorage.setItem("admin_mosque_name", data.mosque_name);
+        }
+        if (data.roles) {
+          localStorage.setItem("user_roles", JSON.stringify(data.roles));
+        }
+      } else {
+        setHasMosqueAdmin(false);
+        setMosqueId("");
+        setMosqueName("");
+        localStorage.removeItem("admin_mosque_id");
+        localStorage.removeItem("admin_mosque_name");
+        if (data.roles) {
+          localStorage.setItem("user_roles", JSON.stringify(data.roles));
+        }
+      }
+    } catch {
+      showToast("Failed to load profile details.", "error");
     }
   };
 
@@ -213,210 +340,181 @@ export default function CityAdminDashboard() {
     loadStats();
     loadAnnouncements();
     loadEvents();
+    loadCityMosques();
+    loadCityAnalytics();
+    loadProfile();
   }, [token]);
 
-  // Bulk Actions
-  const handleBulkAction = async (action: "publish" | "archive" | "delete") => {
-    if (selectedAnnouncements.length === 0) return;
-    if (!confirm(`Are you sure you want to ${action} selected items?`)) return;
-
+  const handleUpdateProfile = async (e: FormEvent) => {
+    e.preventDefault();
+    setSavingProfile(true);
     try {
-      for (const id of selectedAnnouncements) {
-        if (action === "delete") {
-          await apiRequest({ path: `/city-admin/announcements/${id}/`, method: "DELETE" });
-        } else {
-          const ann = announcements.find((a) => a.id === id);
-          if (ann) {
-            await apiRequest({
-              path: `/city-admin/announcements/${id}/`,
-              method: "PUT",
-              body: JSON.stringify({
-                ...ann,
-                status: action === "publish" ? "published" : "archived",
-              }),
-            });
-          }
-        }
-      }
-      showToast(`Bulk ${action} action executed successfully.`, "success");
-      setSelectedAnnouncements([]);
-      loadAnnouncements();
-      loadStats();
+      const updated = await apiRequest<ProfileData>({
+        path: "/city-admin/profile/",
+        method: "PATCH",
+        body: JSON.stringify(profileForm),
+      });
+      setProfile(updated);
+      showToast("Profile details updated successfully!", "success");
     } catch {
-      showToast("Failed to complete bulk operations.", "error");
+      showToast("Failed to update profile.", "error");
+    } finally {
+      setSavingProfile(false);
     }
   };
 
-  // Create or Update Announcement
+  const handleChangePassword = async (e: FormEvent) => {
+    e.preventDefault();
+    if (passwordForm.new_password !== passwordForm.confirm_password) {
+      showToast("New passwords do not match.", "error");
+      return;
+    }
+    setSavingPassword(true);
+    try {
+      const res = await apiRequest<{ token: string; detail: string }>({
+        path: "/city-admin/change-password/",
+        method: "POST",
+        body: JSON.stringify(passwordForm),
+      });
+      if (res.token) {
+        localStorage.setItem("auth_token", res.token);
+        setToken(res.token);
+      }
+      setPasswordForm({ current_password: "", new_password: "", confirm_password: "" });
+      showToast("Password updated successfully!", "success");
+    } catch {
+      showToast("Failed to update password. Check current password.", "error");
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
+  const handleMobileRequestOTP = async (e: FormEvent) => {
+    e.preventDefault();
+    setSavingMobile(true);
+    try {
+      await apiRequest({
+        path: "/city-admin/change-mobile/request/",
+        method: "POST",
+        body: JSON.stringify({
+          current_password: mobileForm.current_password,
+          new_mobile_number: mobileForm.new_mobile_number,
+        }),
+      });
+      setMobileStep("verify");
+      showToast("OTP sent to your new mobile number.", "success");
+    } catch {
+      showToast("Failed to send OTP. Verify current password.", "error");
+    } finally {
+      setSavingMobile(false);
+    }
+  };
+
+  const handleMobileVerifyOTP = async (e: FormEvent) => {
+    e.preventDefault();
+    setSavingMobile(true);
+    try {
+      const res = await apiRequest<{ token: string; detail: string }>({
+        path: "/city-admin/change-mobile/verify/",
+        method: "POST",
+        body: JSON.stringify({
+          new_mobile_number: mobileForm.new_mobile_number,
+          otp_code: mobileForm.otp_code,
+        }),
+      });
+      if (res.token) {
+        localStorage.setItem("auth_token", res.token);
+        setToken(res.token);
+      }
+      setMobileForm({ current_password: "", new_mobile_number: "", otp_code: "" });
+      setMobileStep("request");
+      loadProfile();
+      showToast("Mobile number updated successfully!", "success");
+    } catch {
+      showToast("Failed to verify OTP.", "error");
+    } finally {
+      setSavingMobile(false);
+    }
+  };
+
+  const handleToggleMosqueStatus = async (mosqueId: number, currentStatus: string) => {
+    const nextStatus = currentStatus === "active" ? "inactive" : "active";
+    try {
+      await apiRequest({
+        path: `/city-admin/mosques/${mosqueId}/status/`,
+        method: "PATCH",
+        body: JSON.stringify({ mosque_status: nextStatus }),
+      });
+      showToast(`Mosque status changed to ${nextStatus}`, "success");
+      loadCityMosques();
+    } catch {
+      showToast("Failed to update mosque status.", "error");
+    }
+  };
+
   const handleSaveAnnouncement = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      const payload = {
-        ...announcementForm,
-        city: parseInt(cityId),
-        is_active: true,
-      };
-
       if (editingAnnouncement) {
         await apiRequest({
           path: `/city-admin/announcements/${editingAnnouncement.id}/`,
-          method: "PUT",
-          body: JSON.stringify(payload),
+          method: "PATCH",
+          body: JSON.stringify(announcementForm),
         });
-        showToast("Announcement updated successfully!", "success");
+        showToast("City notice updated successfully!", "success");
       } else {
         await apiRequest({
           path: `/city-admin/announcements/`,
           method: "POST",
-          body: JSON.stringify(payload),
+          body: JSON.stringify(announcementForm),
         });
-        showToast("Announcement published/created successfully!", "success");
+        showToast("City notice created successfully!", "success");
       }
-
       setIsAnnouncementModalOpen(false);
-      setEditingAnnouncement(null);
       loadAnnouncements();
       loadStats();
     } catch {
-      showToast("Failed to save announcement. Verify inputs.", "error");
+      showToast("Failed to save city notice. Verify inputs.", "error");
     }
   };
 
-  // Duplicate Announcement
-  const handleDuplicateAnnouncement = (ann: Announcement) => {
-    setEditingAnnouncement(null);
-    setAnnouncementForm({
-      title: `${ann.title} (Copy)`,
-      short_summary: ann.short_summary,
-      content: ann.content,
-      priority: ann.priority,
-      announcement_type: ann.announcement_type,
-      status: "draft",
-      start_date: new Date().toISOString().split("T")[0],
-      end_date: ann.end_date,
-    });
-    setIsAnnouncementModalOpen(true);
-  };
-
-  // Archive or Restore Announcement
-  const handleToggleArchiveAnn = async (ann: Announcement) => {
-    try {
-      const nextStatus = ann.status === "archived" ? "published" : "archived";
-      await apiRequest({
-        path: `/city-admin/announcements/${ann.id}/`,
-        method: "PUT",
-        body: JSON.stringify({
-          ...ann,
-          status: nextStatus,
-        }),
-      });
-      showToast(
-        nextStatus === "archived" ? "Announcement archived." : "Announcement restored.",
-        "success"
-      );
-      loadAnnouncements();
-      loadStats();
-    } catch {
-      showToast("Failed to change announcement archive state.", "error");
-    }
-  };
-
-  // Create or Update Event
   const handleSaveEvent = async (e: FormEvent) => {
     e.preventDefault();
     try {
+      // Ensure backend HH:MM:SS format
+      const formattedEventTime = eventForm.event_time.includes(":") && eventForm.event_time.split(":").length === 2
+        ? `${eventForm.event_time}:00`
+        : eventForm.event_time;
+      const formattedEndTime = eventForm.end_time.includes(":") && eventForm.end_time.split(":").length === 2
+        ? `${eventForm.end_time}:00`
+        : eventForm.end_time;
+
       const payload = {
         ...eventForm,
-        city: parseInt(cityId),
+        event_time: formattedEventTime,
+        end_time: formattedEndTime,
       };
 
       if (editingEvent) {
         await apiRequest({
           path: `/city-admin/events/${editingEvent.id}/`,
-          method: "PUT",
+          method: "PATCH",
           body: JSON.stringify(payload),
         });
-        showToast("Event details updated successfully!", "success");
+        showToast("City event updated successfully!", "success");
       } else {
         await apiRequest({
           path: `/city-admin/events/`,
           method: "POST",
           body: JSON.stringify(payload),
         });
-        showToast("New event published/created successfully!", "success");
+        showToast("City event created successfully!", "success");
       }
-
       setIsEventModalOpen(false);
-      setEditingEvent(null);
       loadEvents();
       loadStats();
     } catch {
       showToast("Failed to save event. Verify inputs.", "error");
-    }
-  };
-
-  const handleDuplicateEvent = (event: Event) => {
-    setEditingEvent(null);
-    setEventForm({
-      title: `${event.title} (Copy)`,
-      description: event.description,
-      event_type: event.event_type,
-      event_date: event.event_date,
-      event_time: event.event_time,
-      end_time: event.end_time,
-      event_location: event.event_location,
-      speaker_name: event.speaker_name,
-      registration_required: event.registration_required,
-      max_capacity: event.max_capacity,
-      organizer: event.organizer,
-      status: "draft",
-    });
-    setIsEventModalOpen(true);
-  };
-
-  const handleToggleArchiveEvent = async (event: Event) => {
-    try {
-      const nextStatus = event.status === "archived" ? "published" : "archived";
-      await apiRequest({
-        path: `/city-admin/events/${event.id}/`,
-        method: "PUT",
-        body: JSON.stringify({
-          ...event,
-          status: nextStatus,
-        }),
-      });
-      showToast(
-        nextStatus === "archived" ? "Event archived." : "Event restored.",
-        "success"
-      );
-      loadEvents();
-      loadStats();
-    } catch {
-      showToast("Failed to change event archive state.", "error");
-    }
-  };
-
-  // Send Direct Alert Notification
-  const handleSendNotification = async (e: FormEvent) => {
-    e.preventDefault();
-    setSendingNotif(true);
-    try {
-      await apiRequest({
-        path: "/city-admin/notifications/send/",
-        method: "POST",
-        body: JSON.stringify({
-          channel: notifChannel,
-          recipient: notifRecipient,
-          message: notifMessage,
-        }),
-      });
-      showToast("Notification dispatched successfully!", "success");
-      setNotifMessage("");
-      setNotifRecipient("");
-    } catch {
-      showToast("Failed to dispatch notification.", "error");
-    } finally {
-      setSendingNotif(false);
     }
   };
 
@@ -426,7 +524,6 @@ export default function CityAdminDashboard() {
     router.push("/city-admin/login");
   };
 
-  // Filter lists based on search parameters
   const filteredAnnouncements = announcements.filter((ann) => {
     const matchesSearch =
       ann.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -445,6 +542,30 @@ export default function CityAdminDashboard() {
     return matchesSearch && matchesType;
   });
 
+  const getEventDate = (evt: Event) => {
+    if (!evt.event_date) return new Date(0);
+    const timeStr = evt.event_time || "00:00:00";
+    return new Date(`${evt.event_date}T${timeStr}`);
+  };
+
+  const isEventCompleted = (evt: Event) => {
+    if (evt.temporal_status) {
+      return evt.temporal_status === "completed";
+    }
+    if (!evt.event_date) return false;
+    const timeStr = evt.end_time || evt.event_time || "23:59:59";
+    const evtDate = new Date(`${evt.event_date}T${timeStr}`);
+    return evtDate < new Date();
+  };
+
+  const upcomingEvents = filteredEvents
+    .filter((evt) => !isEventCompleted(evt))
+    .sort((a, b) => getEventDate(a).getTime() - getEventDate(b).getTime());
+
+  const completedEvents = filteredEvents
+    .filter((evt) => isEventCompleted(evt))
+    .sort((a, b) => getEventDate(b).getTime() - getEventDate(a).getTime());
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 flex flex-col font-sans">
       {/* Toast Alert */}
@@ -462,12 +583,14 @@ export default function CityAdminDashboard() {
       <header className="bg-white border-b border-slate-200 dark:bg-slate-900 dark:border-slate-800 sticky top-0 z-30">
         <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="bg-emerald-600 text-white rounded-lg p-2 font-bold text-sm tracking-wide">
-              MF
+            <span className="bg-indigo-600 text-white rounded-lg p-2 font-bold text-sm tracking-wide">
+              CA
             </span>
             <div>
-              <h1 className="text-lg font-bold">City Admin Console</h1>
-              <p className="text-xs text-slate-500 font-medium">Managing: {cityName}</p>
+              <h1 className="text-lg font-bold">City Administrator Console</h1>
+              <p className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold uppercase tracking-wider">
+                Jurisdiction: {cityName}
+              </p>
             </div>
           </div>
           <button 
@@ -480,14 +603,16 @@ export default function CityAdminDashboard() {
       </header>
 
       {/* Navigation Tabs */}
-      <div className="bg-white border-b border-slate-200 dark:bg-slate-900 dark:border-slate-800">
+      <div className="bg-white border-b border-slate-200 dark:bg-slate-900 dark:border-slate-800 w-full overflow-hidden">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+          <nav className="-mb-px flex space-x-4 sm:space-x-8 overflow-x-auto no-scrollbar py-1" aria-label="Tabs">
             {[
-              { id: "overview", label: "Overview", icon: Grid },
-              { id: "announcements", label: "Notice Board", icon: FileText },
-              { id: "events", label: "Events", icon: Calendar },
-              { id: "notifications", label: "Notifications", icon: Bell },
+              { id: "overview", label: "City Overview", icon: Grid },
+              { id: "mosques", label: "City Mosques", icon: Building2 },
+              { id: "announcements", label: "City Notices", icon: FileText },
+              { id: "events", label: "City Events", icon: Calendar },
+              ...(hasMosqueAdmin ? [{ id: "my_mosque", label: "My Mosque", icon: Building2 }] : []),
+              { id: "account", label: "Account & Security", icon: Shield },
             ].map((tab) => {
               const Icon = tab.icon;
               const active = activeTab === tab.id;
@@ -495,14 +620,14 @@ export default function CityAdminDashboard() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`border-b-2 py-4 px-1 flex items-center gap-2 text-sm font-semibold transition ${
+                  className={`border-b-2 py-3 sm:py-4 px-1 flex items-center gap-2 text-xs sm:text-sm font-semibold whitespace-nowrap flex-shrink-0 transition ${
                     active 
-                      ? "border-emerald-600 text-emerald-600 dark:text-emerald-400 dark:border-emerald-500" 
+                      ? "border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-500" 
                       : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:hover:text-slate-300"
                   }`}
                 >
-                  <Icon className="h-4 w-4" />
-                  {tab.label}
+                  <Icon className="h-4 w-4 flex-shrink-0" />
+                  <span>{tab.label}</span>
                 </button>
               );
             })}
@@ -513,6 +638,33 @@ export default function CityAdminDashboard() {
       {/* Main Body */}
       <main className="flex-1 py-8">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          
+          {/* Tab: My Mosque (Dual Role) */}
+          {activeTab === "my_mosque" && (
+            <div className="space-y-6">
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-6 dark:border-emerald-900/30 dark:bg-emerald-950/20 shadow-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div>
+                    <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300 mb-2">
+                      Dual Role Assignment
+                    </span>
+                    <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+                      {mosqueName || "Assigned Mosque"} Management
+                    </h2>
+                    <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                      You are assigned as Mosque Administrator for this mosque in addition to your City Administrator responsibilities.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => router.push("/dashboard")}
+                    className="inline-flex min-h-11 items-center justify-center rounded-xl bg-emerald-700 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 dark:bg-emerald-600 dark:hover:bg-emerald-700"
+                  >
+                    Open Mosque Management Dashboard →
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           
           {/* Tab 1: Overview Dashboard Stats */}
           {activeTab === "overview" && (
@@ -525,217 +677,221 @@ export default function CityAdminDashboard() {
                 </div>
               ) : (
                 <>
-                  {/* Alert panel for Emergency alerts */}
                   {stats && stats.emergency_alerts > 0 && (
                     <div className="bg-red-50 text-red-900 border border-red-200 rounded-2xl p-4 flex items-center gap-3 dark:bg-red-950/30 dark:text-red-300 dark:border-red-900">
                       <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400 animate-bounce" />
                       <div>
-                        <h4 className="font-bold text-sm">Critical: Active Emergency Alerts</h4>
-                        <p className="text-xs">There are currently {stats.emergency_alerts} active emergency alerts published for {cityName}.</p>
+                        <h4 className="font-bold text-sm">Active Urgent City Notices</h4>
+                        <p className="text-xs">There are currently {stats.emergency_alerts} active urgent notices for {cityName}.</p>
                       </div>
                     </div>
                   )}
 
                   <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
                     <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-soft dark:bg-slate-900 dark:border-slate-800">
-                      <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Announcements</p>
+                      <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">City Mosques</p>
+                      <h3 className="text-3xl font-bold mt-2 text-slate-900 dark:text-slate-50">{cityMosques.length}</h3>
+                      <div className="mt-2 text-xs flex gap-2 text-slate-400">
+                        <span className="text-emerald-600 font-semibold">{cityMosques.filter(m => m.mosque_status === 'active').length} Active</span>
+                        <span>•</span>
+                        <span>{cityMosques.filter(m => m.mosque_status !== 'active').length} Inactive/Archived</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-soft dark:bg-slate-900 dark:border-slate-800">
+                      <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">City Notices</p>
                       <h3 className="text-3xl font-bold mt-2 text-slate-900 dark:text-slate-50">{stats?.announcements.total || 0}</h3>
                       <div className="mt-2 text-xs flex gap-2 text-slate-400">
-                        <span className="text-emerald-600 font-semibold">{stats?.announcements.published || 0} Active</span>
+                        <span className="text-emerald-600 font-semibold">{stats?.announcements.published || 0} Published</span>
                         <span>•</span>
                         <span>{stats?.announcements.draft || 0} Drafts</span>
                       </div>
                     </div>
 
                     <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-soft dark:bg-slate-900 dark:border-slate-800">
-                      <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Upcoming Events</p>
+                      <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">City Events</p>
                       <h3 className="text-3xl font-bold mt-2 text-slate-900 dark:text-slate-50">{stats?.events.upcoming || 0}</h3>
-                      <div className="mt-2 text-xs flex gap-2 text-slate-400">
-                        <span className="text-emerald-600 font-semibold">{stats?.events.ongoing || 0} Today</span>
-                        <span>•</span>
-                        <span>{stats?.events.completed || 0} Past</span>
-                      </div>
+                      <p className="text-xs text-slate-400 mt-2">Upcoming scheduled programs</p>
                     </div>
 
                     <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-soft dark:bg-slate-900 dark:border-slate-800">
-                      <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Emergency Alerts</p>
-                      <h3 className="text-3xl font-bold mt-2 text-red-600 dark:text-red-400">{stats?.emergency_alerts || 0}</h3>
-                      <p className="text-xs text-slate-400 mt-2">Active broadcast system</p>
-                    </div>
-
-                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-soft dark:bg-slate-900 dark:border-slate-800">
-                      <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Notification Dispatch Status</p>
-                      <h3 className="text-3xl font-bold mt-2 text-emerald-600 dark:text-emerald-400">Online</h3>
-                      <p className="text-xs text-slate-400 mt-2">Dummy dispatch provider active</p>
+                      <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">City Visits</p>
+                      <h3 className="text-3xl font-bold mt-2 text-indigo-600 dark:text-indigo-400">{cityAnalytics?.total_visits || 0}</h3>
+                      <p className="text-xs text-slate-400 mt-2">{cityAnalytics?.unique_identified_visitors || 0} unique visitors</p>
                     </div>
                   </div>
 
-                  {/* Recent Activity Feed */}
-                  <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-soft dark:bg-slate-900 dark:border-slate-800">
-                    <h3 className="text-lg font-bold text-slate-900 dark:text-slate-50 mb-4">Recent Console Activity</h3>
-                    {stats?.recent_activity.length === 0 ? (
-                      <p className="text-sm text-slate-500">No actions recorded recently in this city.</p>
-                    ) : (
-                      <div className="flow-root">
-                        <ul className="-mb-8">
-                          {stats?.recent_activity.map((activity, idx) => (
-                            <li key={activity.id}>
-                              <div className="relative pb-8">
-                                {idx !== stats.recent_activity.length - 1 && (
-                                  <span className="absolute top-4 left-4 -ml-px h-full w-0.5 bg-slate-200 dark:bg-slate-800" aria-hidden="true" />
-                                )}
-                                <div className="relative flex space-x-3">
-                                  <div>
-                                    <span className="h-8 w-8 rounded-full bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center ring-8 ring-white dark:ring-slate-900 text-emerald-600">
-                                      <CheckCircle className="h-4 w-4" />
-                                    </span>
-                                  </div>
-                                  <div className="flex-1 min-w-0 pt-1.5 flex justify-between space-x-4">
-                                    <div>
-                                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                                        {activity.action}: <span className="font-normal text-slate-600 dark:text-slate-400">{activity.description}</span>
-                                      </p>
-                                    </div>
-                                    <div className="text-right text-xs whitespace-nowrap text-slate-400 font-medium">
-                                      {activity.time}
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
+                  {cityAnalytics && (
+                    <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-soft dark:bg-slate-900 dark:border-slate-800">
+                      <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+                        <div>
+                          <h3 className="text-base font-bold text-slate-900 dark:text-slate-50 flex items-center gap-2">
+                            <Building2 className="h-5 w-5 text-indigo-600" /> Visitor Analytics ({cityName})
+                          </h3>
+                          <p className="text-xs text-slate-400 mt-0.5">Privacy-conscious visitor metrics for your city.</p>
+                        </div>
+                        <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 dark:text-indigo-400 px-3 py-1 rounded-full">
+                          City Scoped
+                        </span>
                       </div>
-                    )}
-                  </div>
+
+                      <div className="mt-6 grid gap-5 sm:grid-cols-3">
+                        <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-xl border border-slate-100 dark:border-slate-800">
+                          <p className="text-xs font-semibold text-slate-500">Total City Visits</p>
+                          <h4 className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{cityAnalytics.total_visits}</h4>
+                          <div className="mt-2 text-[11px] text-slate-400 flex justify-between">
+                            <span>Today: {cityAnalytics.period_metrics.today}</span>
+                            <span>This Week: {cityAnalytics.period_metrics.this_week}</span>
+                          </div>
+                        </div>
+
+                        <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-xl border border-slate-100 dark:border-slate-800">
+                          <p className="text-xs font-semibold text-slate-500">Unique Identified Visitors</p>
+                          <h4 className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{cityAnalytics.unique_identified_visitors}</h4>
+                          <p className="mt-2 text-[11px] text-slate-400">Anonymous device session tokens</p>
+                        </div>
+
+                        <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-xl border border-slate-100 dark:border-slate-800">
+                          <p className="text-xs font-semibold text-slate-500">Top Viewed Mosques</p>
+                          {cityAnalytics.top_mosques.length === 0 ? (
+                            <p className="text-xs text-slate-400 mt-2">No mosque views recorded yet.</p>
+                          ) : (
+                            <ul className="mt-2 space-y-1 text-xs text-slate-600 dark:text-slate-300">
+                              {cityAnalytics.top_mosques.slice(0, 3).map((m) => (
+                                <li key={m.mosque_id} className="flex justify-between truncate">
+                                  <span className="truncate">{m.mosque_name}</span>
+                                  <span className="font-bold text-indigo-600 ml-2">{m.views}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </div>
           )}
 
-          {/* Tab 2: Announcement Management */}
+          {/* Tab 2: City Mosques Directory */}
+          {activeTab === "mosques" && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <Building2 className="h-5 w-5 text-indigo-600" /> Mosques Directory — {cityName}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Review and manage mosque status across your city jurisdiction.
+                  </p>
+                </div>
+                <button
+                  onClick={loadCityMosques}
+                  className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
+                >
+                  <RefreshCw className="h-4 w-4" /> Refresh
+                </button>
+              </div>
+
+              {loadingMosques ? (
+                <div className="p-8 text-center text-slate-500">Loading mosques in {cityName}...</div>
+              ) : cityMosques.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-500 dark:bg-slate-900 dark:border-slate-800">
+                  No mosques registered in {cityName} yet.
+                </div>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {cityMosques.map((m) => (
+                    <div key={m.id} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-soft dark:bg-slate-900 dark:border-slate-800 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <h4 className="font-bold text-slate-900 dark:text-slate-50 text-base">{m.mosque_name}</h4>
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-wider ${
+                            m.mosque_status === "active"
+                              ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400"
+                              : "bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400"
+                          }`}>
+                            {m.mosque_status}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 mb-3">{m.address || "No street address provided"}</p>
+                      </div>
+
+                      <div className="border-t pt-3 flex items-center justify-between">
+                        <span className="text-xs text-slate-400">ID: #{m.id}</span>
+                        <button
+                          onClick={() => handleToggleMosqueStatus(m.id, m.mosque_status)}
+                          className={`rounded-lg px-3 py-1 text-xs font-semibold transition ${
+                            m.mosque_status === "active"
+                              ? "border border-red-200 text-red-700 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950/30"
+                              : "bg-emerald-600 text-white hover:bg-emerald-500"
+                          }`}
+                        >
+                          {m.mosque_status === "active" ? "Deactivate" : "Activate"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Tab 3: City Notices */}
           {activeTab === "announcements" && (
             <div className="space-y-6">
-              {/* Toolbar */}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex flex-1 max-w-md items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 dark:bg-slate-900 dark:border-slate-700">
                   <Search className="h-4 w-4 text-slate-400" />
                   <input
                     type="text"
-                    placeholder="Search announcements..."
+                    placeholder="Search city notices..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full border-0 bg-transparent p-0 text-sm focus:ring-0 outline-none"
                   />
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3">
-                  <select
-                    value={filterType}
-                    onChange={(e) => setFilterType(e.target.value)}
-                    className="rounded-lg border-slate-300 text-sm bg-white dark:bg-slate-900 dark:border-slate-700 py-2 px-3 focus:ring-emerald-500"
-                  >
-                    <option value="all">All Categories</option>
-                    <option value="general">General</option>
-                    <option value="emergency">Emergency</option>
-                    <option value="prayer">Prayer Update</option>
-                    <option value="ramadan">Ramadan</option>
-                    <option value="eid">Eid</option>
-                  </select>
-
-                  <select
-                    value={filterPriority}
-                    onChange={(e) => setFilterPriority(e.target.value)}
-                    className="rounded-lg border-slate-300 text-sm bg-white dark:bg-slate-900 dark:border-slate-700 py-2 px-3 focus:ring-emerald-500"
-                  >
-                    <option value="all">All Priorities</option>
-                    <option value="normal">Normal</option>
-                    <option value="important">Important</option>
-                    <option value="urgent">Urgent</option>
-                  </select>
-
-                  <button
-                    onClick={() => {
-                      setEditingAnnouncement(null);
-                      setAnnouncementForm({
-                        title: "",
-                        short_summary: "",
-                        content: "",
-                        priority: "normal",
-                        announcement_type: "general",
-                        status: "draft",
-                        start_date: new Date().toISOString().split("T")[0],
-                        end_date: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString().split("T")[0],
-                      });
-                      setIsAnnouncementModalOpen(true);
-                    }}
-                    className="flex items-center gap-2 rounded-lg bg-emerald-600 text-white px-4 py-2 text-sm font-semibold hover:bg-emerald-500 transition"
-                  >
-                    <Plus className="h-4 w-4" /> Create Announcement
-                  </button>
-                </div>
+                <button
+                  onClick={() => {
+                    setEditingAnnouncement(null);
+                    setAnnouncementForm({
+                      title: "",
+                      short_summary: "",
+                      content: "",
+                      priority: "normal",
+                      announcement_type: "general",
+                      status: "published",
+                      start_date: new Date().toISOString().split("T")[0],
+                      end_date: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString().split("T")[0],
+                    });
+                    setIsAnnouncementModalOpen(true);
+                  }}
+                  className="flex items-center gap-2 rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-semibold hover:bg-indigo-500 transition"
+                >
+                  <Plus className="h-4 w-4" /> Create City Notice
+                </button>
               </div>
 
-              {/* Bulk operations panel */}
-              {selectedAnnouncements.length > 0 && (
-                <div className="bg-slate-100 dark:bg-slate-900 rounded-xl p-3 flex items-center justify-between border border-slate-200 dark:border-slate-800">
-                  <span className="text-sm font-semibold">{selectedAnnouncements.length} items selected</span>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleBulkAction("publish")}
-                      className="text-xs bg-white border px-3 py-1.5 rounded-lg font-semibold hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-750 transition"
-                    >
-                      Publish
-                    </button>
-                    <button
-                      onClick={() => handleBulkAction("archive")}
-                      className="text-xs bg-white border px-3 py-1.5 rounded-lg font-semibold hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-750 transition"
-                    >
-                      Archive
-                    </button>
-                    <button
-                      onClick={() => handleBulkAction("delete")}
-                      className="text-xs bg-red-600 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-red-500 transition"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Table / Grid list */}
               {loadingAnnouncements ? (
                 <div className="space-y-4">
-                  {[1, 2, 3].map((i) => (
+                  {[1, 2].map((i) => (
                     <div key={i} className="animate-pulse bg-white p-6 rounded-2xl border border-slate-200 h-24 dark:bg-slate-900 dark:border-slate-800"></div>
                   ))}
                 </div>
               ) : filteredAnnouncements.length === 0 ? (
                 <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-500 dark:bg-slate-900 dark:border-slate-800">
-                  No announcements found matching search criteria.
+                  No city notices published yet. Click &quot;Create City Notice&quot; to publish announcements for {cityName}.
                 </div>
               ) : (
                 <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden dark:bg-slate-900 dark:border-slate-800 shadow-soft">
                   <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
                     <thead className="bg-slate-50 dark:bg-slate-800">
                       <tr>
-                        <th className="px-6 py-3 text-left">
-                          <input
-                            type="checkbox"
-                            checked={selectedAnnouncements.length === filteredAnnouncements.length}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedAnnouncements(filteredAnnouncements.map((a) => a.id));
-                              } else {
-                                setSelectedAnnouncements([]);
-                              }
-                            }}
-                            className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-                          />
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Title</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Notice Title</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Category</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Priority</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Importance</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
                         <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
                       </tr>
@@ -744,33 +900,19 @@ export default function CityAdminDashboard() {
                       {filteredAnnouncements.map((ann) => (
                         <tr key={ann.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
                           <td className="px-6 py-4">
-                            <input
-                              type="checkbox"
-                              checked={selectedAnnouncements.includes(ann.id)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedAnnouncements((prev) => [...prev, ann.id]);
-                                } else {
-                                  setSelectedAnnouncements((prev) => prev.filter((id) => id !== ann.id));
-                                }
-                              }}
-                              className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-                            />
-                          </td>
-                          <td className="px-6 py-4">
                             <div className="font-semibold text-slate-900 dark:text-slate-50">{ann.title}</div>
                             <div className="text-xs text-slate-500 line-clamp-1">{ann.short_summary || ann.content}</div>
                           </td>
                           <td className="px-6 py-4 text-sm capitalize">{ann.announcement_type}</td>
                           <td className="px-6 py-4">
-                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium uppercase tracking-wider ${
+                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider ${
                               ann.priority === "urgent"
                                 ? "bg-red-50 text-red-800 ring-1 ring-inset ring-red-600/10"
                                 : ann.priority === "important"
                                 ? "bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-600/10"
                                 : "bg-slate-100 text-slate-800"
                             }`}>
-                              {ann.priority}
+                              {ann.priority === "urgent" ? "Urgent" : ann.priority === "important" ? "Important" : "Normal"}
                             </span>
                           </td>
                           <td className="px-6 py-4 text-sm capitalize">{ann.status}</td>
@@ -795,20 +937,6 @@ export default function CityAdminDashboard() {
                             >
                               <Edit3 className="h-4 w-4" />
                             </button>
-                            <button
-                              onClick={() => handleDuplicateAnnouncement(ann)}
-                              className="p-1 text-slate-500 hover:text-slate-900"
-                              title="Duplicate"
-                            >
-                              <Copy className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => handleToggleArchiveAnn(ann)}
-                              className="p-1 text-slate-500 hover:text-slate-900"
-                              title={ann.status === "archived" ? "Restore" : "Archive"}
-                            >
-                              <Archive className="h-4 w-4" />
-                            </button>
                           </td>
                         </tr>
                       ))}
@@ -819,42 +947,14 @@ export default function CityAdminDashboard() {
             </div>
           )}
 
-          {/* Tab 3: Event Management */}
+          {/* Tab 4: City Events */}
           {activeTab === "events" && (
             <div className="space-y-6">
-              {/* Event view filters & toggles */}
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex border rounded-lg overflow-hidden border-slate-300 dark:border-slate-700 bg-white">
-                    <button
-                      onClick={() => setEventsViewMode("list")}
-                      className={`p-2 transition ${eventsViewMode === "list" ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30" : "hover:bg-slate-50"}`}
-                      title="List View"
-                    >
-                      <List className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => setEventsViewMode("calendar")}
-                      className={`p-2 transition ${eventsViewMode === "calendar" ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30" : "hover:bg-slate-50"}`}
-                      title="Calendar Grid View"
-                    >
-                      <Grid className="h-4 w-4" />
-                    </button>
-                  </div>
-
-                  <select
-                    value={filterType}
-                    onChange={(e) => setFilterType(e.target.value)}
-                    className="rounded-lg border-slate-300 text-sm bg-white dark:bg-slate-900 dark:border-slate-700 py-2 px-3 focus:ring-emerald-500"
-                  >
-                    <option value="all">All Types</option>
-                    <option value="lecture">Lectures</option>
-                    <option value="program">Programs</option>
-                    <option value="class">Islamic Classes</option>
-                    <option value="youth">Youth Activities</option>
-                  </select>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">City Events & Programs</h3>
+                  <p className="text-xs text-slate-500">Public events scheduled across {cityName}.</p>
                 </div>
-
                 <button
                   onClick={() => {
                     setEditingEvent(null);
@@ -863,8 +963,8 @@ export default function CityAdminDashboard() {
                       description: "",
                       event_type: "lecture",
                       event_date: new Date().toISOString().split("T")[0],
-                      event_time: "18:00:00",
-                      end_time: "19:30:00",
+                      event_time: "18:00",
+                      end_time: "19:30",
                       event_location: "",
                       speaker_name: "",
                       registration_required: false,
@@ -874,220 +974,329 @@ export default function CityAdminDashboard() {
                     });
                     setIsEventModalOpen(true);
                   }}
-                  className="flex items-center gap-2 rounded-lg bg-emerald-600 text-white px-4 py-2 text-sm font-semibold hover:bg-emerald-500 transition"
+                  className="flex items-center gap-2 rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-semibold hover:bg-indigo-500 transition"
                 >
-                  <Plus className="h-4 w-4" /> Create Event
+                  <Plus className="h-4 w-4" /> Create City Event
                 </button>
               </div>
 
-              {/* View Render */}
               {loadingEvents ? (
-                <div className="space-y-4">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="animate-pulse bg-white p-6 rounded-2xl border border-slate-200 h-24 dark:bg-slate-900 dark:border-slate-800"></div>
-                  ))}
-                </div>
-              ) : eventsViewMode === "list" ? (
-                /* List View */
-                filteredEvents.length === 0 ? (
-                  <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-500 dark:bg-slate-900 dark:border-slate-800">
-                    No upcoming events scheduled.
-                  </div>
-                ) : (
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {filteredEvents.map((evt) => (
-                      <div
-                        key={evt.id}
-                        className="bg-white rounded-2xl border border-slate-200 p-5 shadow-soft hover:shadow-md transition relative flex flex-col dark:bg-slate-900 dark:border-slate-800"
-                      >
-                        <div className="flex justify-between items-start mb-2">
-                          <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800 ring-1 ring-inset ring-emerald-600/10 uppercase tracking-wider">
-                            {evt.event_type}
-                          </span>
-                          <span className="text-xs font-semibold uppercase text-slate-500">{evt.status}</span>
-                        </div>
-                        <h4 className="font-bold text-slate-900 dark:text-slate-50 text-base mb-1">{evt.title}</h4>
-                        <p className="text-xs text-slate-500 line-clamp-2 mb-4">{evt.description}</p>
-                        
-                        <div className="mt-auto space-y-1 text-xs text-slate-600 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-3">
-                          <div><span className="font-semibold text-slate-800 dark:text-slate-300">Speaker:</span> {evt.speaker_name}</div>
-                          <div><span className="font-semibold text-slate-800 dark:text-slate-300">Date:</span> {evt.event_date}</div>
-                          <div><span className="font-semibold text-slate-800 dark:text-slate-300">Time:</span> {evt.event_time} - {evt.end_time}</div>
-                          {evt.event_location && <div><span className="font-semibold text-slate-800 dark:text-slate-300">Location:</span> {evt.event_location}</div>}
-                        </div>
-
-                        <div className="flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800 pt-3 mt-4">
-                          <button
-                            onClick={() => {
-                              setEditingEvent(evt);
-                              setEventForm({
-                                title: evt.title,
-                                description: evt.description,
-                                event_type: evt.event_type,
-                                event_date: evt.event_date,
-                                event_time: evt.event_time,
-                                end_time: evt.end_time,
-                                event_location: evt.event_location,
-                                speaker_name: evt.speaker_name,
-                                registration_required: evt.registration_required,
-                                max_capacity: evt.max_capacity,
-                                organizer: evt.organizer,
-                                status: evt.status,
-                              });
-                              setIsEventModalOpen(true);
-                            }}
-                            className="p-1.5 text-slate-500 hover:text-slate-900"
-                            title="Edit"
-                          >
-                            <Edit3 className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDuplicateEvent(evt)}
-                            className="p-1.5 text-slate-500 hover:text-slate-900"
-                            title="Duplicate"
-                          >
-                            <Copy className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => handleToggleArchiveEvent(evt)}
-                            className="p-1.5 text-slate-500 hover:text-slate-900"
-                            title={evt.status === "archived" ? "Restore" : "Archive"}
-                          >
-                            <Archive className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )
+                <div className="p-8 text-center text-slate-500">Loading city events...</div>
               ) : (
-                /* Calendar Grid Mock layout for dashboard consistency */
-                <div className="bg-white rounded-2xl border border-slate-200 p-6 dark:bg-slate-900 dark:border-slate-800">
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="font-bold text-slate-900 dark:text-slate-50">July 2026</h4>
+                <div className="space-y-10">
+                  {/* Section 1: UPCOMING EVENTS */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-200 pb-3 dark:border-slate-800">
+                      <div className="flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
+                        <h4 className="text-base font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                          Upcoming Events ({upcomingEvents.length})
+                        </h4>
+                      </div>
+                      <span className="text-xs text-slate-500">Sorted nearest upcoming first</span>
+                    </div>
+
+                    {upcomingEvents.length === 0 ? (
+                      <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-500 dark:bg-slate-900 dark:border-slate-800">
+                        No upcoming events scheduled. Click &quot;Create City Event&quot; to publish a new event.
+                      </div>
+                    ) : (
+                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {upcomingEvents.map((evt) => (
+                          <div key={evt.id} className="bg-white rounded-2xl border border-emerald-200/80 p-5 shadow-soft dark:bg-slate-900 dark:border-slate-800 flex flex-col justify-between">
+                            <div>
+                              <div className="flex justify-between items-start mb-2 gap-2">
+                                <span className="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-800 uppercase tracking-wider">
+                                  {evt.event_type}
+                                </span>
+                                <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                                  <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 uppercase tracking-wider">
+                                    Upcoming
+                                  </span>
+                                  <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700 uppercase tracking-wider">
+                                    {evt.status}
+                                  </span>
+                                </div>
+                              </div>
+                              <h4 className="font-bold text-slate-900 dark:text-slate-50 text-base mb-1">{evt.title}</h4>
+                              {evt.description && <p className="text-xs text-slate-500 line-clamp-2 mb-3">{evt.description}</p>}
+                            </div>
+                            <div className="border-t border-slate-100 pt-3 space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
+                              <div><span className="font-semibold text-slate-700 dark:text-slate-300">Date:</span> {evt.event_date}</div>
+                              <div><span className="font-semibold text-slate-700 dark:text-slate-300">Time:</span> {formatTimeTo12Hour(evt.event_time)}{evt.end_time ? ` - ${formatTimeTo12Hour(evt.end_time)}` : ""}</div>
+                              {evt.speaker_name && <div><span className="font-semibold text-slate-700 dark:text-slate-300">Speaker:</span> {evt.speaker_name}</div>}
+                              {evt.event_location && <div><span className="font-semibold text-slate-700 dark:text-slate-300">Venue:</span> {evt.event_location}</div>}
+                              
+                              <div className="border-t border-slate-100 pt-2 mt-2 space-y-0.5 text-[11px]">
+                                <div>
+                                  <span className="text-slate-400">Organized by:</span>{" "}
+                                  <span className="font-medium text-slate-700 dark:text-slate-300">{evt.organizer_name || `${cityName} City Administration`}</span>
+                                </div>
+                                <div>
+                                  <span className="text-slate-400">Posted by:</span>{" "}
+                                  <span className="font-medium text-slate-700 dark:text-slate-300">
+                                    {evt.published_by?.name || "City Administrator"} · City Administrator, {evt.published_by?.city || cityName}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <div className="grid grid-cols-7 gap-2 text-center text-xs font-semibold text-slate-500 border-b pb-2">
-                    {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-                      <div key={d}>{d}</div>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-7 gap-2 mt-2 text-sm">
-                    {Array.from({ length: 31 }, (_, i) => {
-                      const dayNum = i + 1;
-                      const dateStr = `2026-07-${String(dayNum).padStart(2, "0")}`;
-                      const dayEvents = filteredEvents.filter((e) => e.event_date === dateStr);
-                      return (
-                        <div key={i} className="min-h-16 border rounded-lg p-1 bg-slate-50/50 flex flex-col justify-between hover:bg-slate-100/50">
-                          <span className="font-semibold text-slate-400">{dayNum}</span>
-                          {dayEvents.map((e) => (
-                            <span key={e.id} className="text-[10px] font-bold bg-emerald-100 text-emerald-900 rounded px-1 truncate">
-                              {e.title}
-                            </span>
-                          ))}
-                        </div>
-                      );
-                    })}
+
+                  {/* Section 2: COMPLETED EVENTS */}
+                  <div className="space-y-4 pt-4 border-t border-slate-200/60 dark:border-slate-800">
+                    <div className="flex items-center justify-between border-b border-slate-200 pb-3 dark:border-slate-800">
+                      <div className="flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full bg-slate-400"></span>
+                        <h4 className="text-base font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                          Completed Events ({completedEvents.length})
+                        </h4>
+                      </div>
+                      <span className="text-xs text-slate-400">Sorted most-recent completed first</span>
+                    </div>
+
+                    {completedEvents.length === 0 ? (
+                      <div className="bg-slate-50/50 rounded-2xl border border-slate-200 p-8 text-center text-slate-400 dark:bg-slate-900/50 dark:border-slate-800 text-xs">
+                        No completed events yet.
+                      </div>
+                    ) : (
+                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {completedEvents.map((evt) => (
+                          <div key={evt.id} className="bg-slate-50/60 rounded-2xl border border-slate-200/80 p-5 dark:bg-slate-900/40 dark:border-slate-800 flex flex-col justify-between opacity-85 hover:opacity-100 transition">
+                            <div>
+                              <div className="flex justify-between items-start mb-2 gap-2">
+                                <span className="inline-flex items-center rounded-full bg-slate-200/70 px-2.5 py-0.5 text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                                  {evt.event_type}
+                                </span>
+                                <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                                  <span className="inline-flex items-center rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+                                    Completed
+                                  </span>
+                                  <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 uppercase tracking-wider">
+                                    {evt.status}
+                                  </span>
+                                </div>
+                              </div>
+                              <h4 className="font-bold text-slate-800 dark:text-slate-200 text-base mb-1">{evt.title}</h4>
+                              {evt.description && <p className="text-xs text-slate-500 line-clamp-2 mb-3">{evt.description}</p>}
+                            </div>
+                            <div className="border-t border-slate-200/60 pt-3 space-y-1.5 text-xs text-slate-500 dark:text-slate-400">
+                              <div><span className="font-semibold text-slate-600 dark:text-slate-400">Date:</span> {evt.event_date}</div>
+                              <div><span className="font-semibold text-slate-600 dark:text-slate-400">Time:</span> {formatTimeTo12Hour(evt.event_time)}{evt.end_time ? ` - ${formatTimeTo12Hour(evt.end_time)}` : ""}</div>
+                              {evt.speaker_name && <div><span className="font-semibold text-slate-600 dark:text-slate-400">Speaker:</span> {evt.speaker_name}</div>}
+                              {evt.event_location && <div><span className="font-semibold text-slate-600 dark:text-slate-400">Venue:</span> {evt.event_location}</div>}
+                              
+                              <div className="border-t border-slate-200/60 pt-2 mt-2 space-y-0.5 text-[11px]">
+                                <div>
+                                  <span className="text-slate-400">Organized by:</span>{" "}
+                                  <span className="font-medium text-slate-600 dark:text-slate-400">{evt.organizer_name || `${cityName} City Administration`}</span>
+                                </div>
+                                <div>
+                                  <span className="text-slate-400">Posted by:</span>{" "}
+                                  <span className="font-medium text-slate-600 dark:text-slate-400">
+                                    {evt.published_by?.name || "City Administrator"} · City Administrator, {evt.published_by?.city || cityName}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
             </div>
           )}
 
-          {/* Tab 4: Direct Notification Broadcasting */}
-          {activeTab === "notifications" && (
-            <div className="max-w-2xl mx-auto bg-white rounded-2xl border border-slate-200 p-6 shadow-soft dark:bg-slate-900 dark:border-slate-800">
-              <h3 className="text-lg font-bold text-slate-900 dark:text-slate-50 mb-2">Direct Notification Broadcast</h3>
-              <p className="text-xs text-slate-500 mb-6">Dispatch priority notifications via WhatsApp, SMS, or In-App alerts directly to community members.</p>
-
-              <form onSubmit={handleSendNotification} className="space-y-6">
-                <div>
-                  <label className="block text-sm font-semibold mb-1.5">Notification Channel</label>
-                  <select
-                    value={notifChannel}
-                    onChange={(e) => setNotifChannel(e.target.value)}
-                    className="w-full rounded-lg border-slate-300 bg-white dark:bg-slate-800 dark:border-slate-700 py-2 px-3"
-                  >
-                    <option value="whatsapp">Primary WhatsApp</option>
-                    <option value="sms">SMS</option>
-                    <option value="email">Email</option>
-                    <option value="push">Push Notification</option>
-                    <option value="in_app">In-App Notification</option>
-                  </select>
+          {/* Tab 5: Account & Security */}
+          {activeTab === "account" && (
+            <div className="max-w-4xl mx-auto space-y-8">
+              {/* Profile Details Card */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-soft dark:bg-slate-900 dark:border-slate-800">
+                <div className="flex items-center gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
+                  <User className="h-6 w-6 text-indigo-600" />
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">Personal Profile</h3>
+                    <p className="text-xs text-slate-500">Manage your administrator contact details.</p>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-semibold mb-1.5">Recipient Identity Contact</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. +919876543210 or user@email.com"
-                    value={notifRecipient}
-                    onChange={(e) => setNotifRecipient(e.target.value)}
-                    className="w-full rounded-lg border-slate-300 dark:bg-slate-800 dark:border-slate-700 py-2 px-3 text-slate-900 dark:text-slate-100"
-                  />
+                <form onSubmit={handleUpdateProfile} className="mt-6 space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold mb-1">First Name</label>
+                      <input
+                        type="text"
+                        required
+                        value={profileForm.first_name}
+                        onChange={(e) => setProfileForm({ ...profileForm, first_name: e.target.value })}
+                        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold mb-1">Last Name</label>
+                      <input
+                        type="text"
+                        required
+                        value={profileForm.last_name}
+                        onChange={(e) => setProfileForm({ ...profileForm, last_name: e.target.value })}
+                        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">Email Address</label>
+                    <input
+                      type="email"
+                      required
+                      value={profileForm.email}
+                      onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                      className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700"
+                    />
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                    <button
+                      type="submit"
+                      disabled={savingProfile}
+                      className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-500 disabled:opacity-50 transition"
+                    >
+                      {savingProfile ? "Saving..." : "Save Profile Details"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Password Change Card */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-soft dark:bg-slate-900 dark:border-slate-800">
+                <div className="flex items-center gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
+                  <KeyRound className="h-6 w-6 text-indigo-600" />
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">Change Password</h3>
+                    <p className="text-xs text-slate-500">Update your account password securely.</p>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-semibold mb-1.5">Broadcast Message Content</label>
-                  <textarea
-                    required
-                    rows={4}
-                    placeholder="Type details of notification..."
-                    value={notifMessage}
-                    onChange={(e) => setNotifMessage(e.target.value)}
-                    className="w-full rounded-lg border-slate-300 dark:bg-slate-800 dark:border-slate-700 py-2 px-3 text-slate-900 dark:text-slate-100"
-                  />
-                </div>
+                <form onSubmit={handleChangePassword} className="mt-6 space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold mb-1">Current Password</label>
+                    <input
+                      type="password"
+                      required
+                      value={passwordForm.current_password}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, current_password: e.target.value })}
+                      className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700"
+                    />
+                  </div>
 
-                <button
-                  type="submit"
-                  disabled={sendingNotif}
-                  className="flex w-full justify-center rounded-lg bg-emerald-600 py-2.5 px-3.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
-                >
-                  {sendingNotif ? "Dispatching..." : "Send Notification"}
-                </button>
-              </form>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold mb-1">New Password</label>
+                      <input
+                        type="password"
+                        required
+                        minLength={8}
+                        value={passwordForm.new_password}
+                        onChange={(e) => setPasswordForm({ ...passwordForm, new_password: e.target.value })}
+                        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold mb-1">Confirm New Password</label>
+                      <input
+                        type="password"
+                        required
+                        minLength={8}
+                        value={passwordForm.confirm_password}
+                        onChange={(e) => setPasswordForm({ ...passwordForm, confirm_password: e.target.value })}
+                        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                    <button
+                      type="submit"
+                      disabled={savingPassword}
+                      className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-500 disabled:opacity-50 transition"
+                    >
+                      {savingPassword ? "Updating..." : "Update Password"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Mobile Number & Account Security Policy Banner */}
+              <div className="bg-amber-50 rounded-2xl border border-amber-200 p-6 text-amber-900 dark:bg-amber-950/30 dark:border-amber-900 dark:text-amber-300">
+                <div className="flex items-start gap-3">
+                  <Lock className="h-6 w-6 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="font-bold text-sm">Registered Mobile Number & Security Policy</h4>
+                    <p className="text-xs mt-1 leading-relaxed">
+                      Your registered mobile number <strong>({profile?.mobile_number || "Verified"})</strong> is your primary security credential. If you ever lose access to this mobile line, self-service phone change is disabled to protect your city console from account takeover. Contact MosqueCom Super Admin for manual identity verification.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
+
         </div>
       </main>
 
-      {/* Modal: Announcement Form */}
+      {/* Modal: Notice Form */}
       {isAnnouncementModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 dark:bg-slate-900 shadow-xl border border-slate-200 dark:border-slate-800">
-            <h3 className="text-lg font-bold mb-4">{editingAnnouncement ? "Edit Announcement" : "Create Announcement"}</h3>
+            <h3 className="text-lg font-bold mb-1">{editingAnnouncement ? "Edit City Notice" : "Create City Notice"}</h3>
+            <p className="text-xs text-slate-500 mb-4">Publish a community notice or public announcement relevant to {cityName}.</p>
+
             <form onSubmit={handleSaveAnnouncement} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold mb-1">Title</label>
                 <input
                   type="text"
                   required
+                  placeholder="e.g. Eid Prayer Announcement"
                   value={announcementForm.title}
                   onChange={(e) => setAnnouncementForm({...announcementForm, title: e.target.value})}
-                  className="w-full rounded-lg border-slate-300 dark:bg-slate-800 dark:border-slate-750 py-2 px-3"
+                  className="w-full rounded-lg border-slate-300 dark:bg-slate-800 py-2 px-3 text-sm"
                 />
+                <p className="text-[11px] text-slate-400 mt-1">Give your notice a short, clear title.</p>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold mb-1">Short Summary (optional)</label>
+                <label className="block text-xs font-semibold mb-1">Short Description</label>
                 <input
                   type="text"
+                  required
+                  placeholder="e.g. Eid prayer will be held at Eidgah Ground at 8:00 AM."
                   value={announcementForm.short_summary}
                   onChange={(e) => setAnnouncementForm({...announcementForm, short_summary: e.target.value})}
-                  className="w-full rounded-lg border-slate-300 dark:bg-slate-800 dark:border-slate-750 py-2 px-3"
+                  className="w-full rounded-lg border-slate-300 dark:bg-slate-800 py-2 px-3 text-sm"
                 />
+                <p className="text-[11px] text-slate-400 mt-1">Write a short summary that people can understand quickly.</p>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold mb-1">Message Content</label>
+                <label className="block text-xs font-semibold mb-1">Notice Details</label>
                 <textarea
                   required
                   rows={4}
+                  placeholder={`Example:
+Eid-ul-Adha prayer will be held at Eidgah Ground on Monday, 9 June at 8:00 AM.
+
+Please arrive 20 minutes early and bring your prayer mat.`}
                   value={announcementForm.content}
                   onChange={(e) => setAnnouncementForm({...announcementForm, content: e.target.value})}
-                  className="w-full rounded-lg border-slate-300 dark:bg-slate-800 dark:border-slate-750 py-2 px-3"
+                  className="w-full rounded-lg border-slate-300 dark:bg-slate-800 py-2 px-3 text-sm"
                 />
+                <p className="text-[11px] text-slate-400 mt-1">Write the complete information you want people in your city to know.</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -1096,7 +1305,7 @@ export default function CityAdminDashboard() {
                   <select
                     value={announcementForm.announcement_type}
                     onChange={(e) => setAnnouncementForm({...announcementForm, announcement_type: e.target.value})}
-                    className="w-full rounded-lg border-slate-300 dark:bg-slate-800 py-2 px-3"
+                    className="w-full rounded-lg border-slate-300 dark:bg-slate-800 py-2 px-3 text-sm"
                   >
                     <option value="general">General</option>
                     <option value="emergency">Emergency</option>
@@ -1104,23 +1313,21 @@ export default function CityAdminDashboard() {
                     <option value="ramadan">Ramadan</option>
                     <option value="eid">Eid</option>
                     <option value="community">Community</option>
-                    <option value="education">Education</option>
-                    <option value="charity">Charity</option>
-                    <option value="lost_found">Lost & Found</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold mb-1">Priority</label>
+                  <label className="block text-xs font-semibold mb-1">Importance</label>
                   <select
                     value={announcementForm.priority}
                     onChange={(e) => setAnnouncementForm({...announcementForm, priority: e.target.value})}
-                    className="w-full rounded-lg border-slate-300 dark:bg-slate-800 py-2 px-3"
+                    className="w-full rounded-lg border-slate-300 dark:bg-slate-800 py-2 px-3 text-sm"
                   >
                     <option value="normal">Normal</option>
                     <option value="important">Important</option>
                     <option value="urgent">Urgent</option>
                   </select>
+                  <p className="text-[11px] text-slate-400 mt-1">Use Urgent only when immediate attention is required.</p>
                 </div>
               </div>
 
@@ -1132,7 +1339,7 @@ export default function CityAdminDashboard() {
                     required
                     value={announcementForm.start_date}
                     onChange={(e) => setAnnouncementForm({...announcementForm, start_date: e.target.value})}
-                    className="w-full rounded-lg border-slate-300 dark:bg-slate-800 py-2 px-3"
+                    className="w-full rounded-lg border-slate-300 dark:bg-slate-800 py-2 px-3 text-sm"
                   />
                 </div>
 
@@ -1143,20 +1350,20 @@ export default function CityAdminDashboard() {
                     required
                     value={announcementForm.end_date}
                     onChange={(e) => setAnnouncementForm({...announcementForm, end_date: e.target.value})}
-                    className="w-full rounded-lg border-slate-300 dark:bg-slate-800 py-2 px-3"
+                    className="w-full rounded-lg border-slate-300 dark:bg-slate-800 py-2 px-3 text-sm"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold mb-1">Publish State</label>
+                <label className="block text-xs font-semibold mb-1">Status</label>
                 <select
                   value={announcementForm.status}
                   onChange={(e) => setAnnouncementForm({...announcementForm, status: e.target.value})}
-                  className="w-full rounded-lg border-slate-300 dark:bg-slate-800 py-2 px-3"
+                  className="w-full rounded-lg border-slate-300 dark:bg-slate-800 py-2 px-3 text-sm"
                 >
-                  <option value="draft">Draft (Private)</option>
                   <option value="published">Published (Public)</option>
+                  <option value="draft">Draft (Private)</option>
                 </select>
               </div>
 
@@ -1170,9 +1377,9 @@ export default function CityAdminDashboard() {
                 </button>
                 <button
                   type="submit"
-                  className="rounded-lg bg-emerald-600 text-white px-4 py-2 text-sm font-semibold hover:bg-emerald-500 transition"
+                  className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-semibold hover:bg-indigo-500 transition"
                 >
-                  Save Announcement
+                  {announcementForm.status === "published" ? "Publish Notice" : "Save Notice"}
                 </button>
               </div>
             </form>
@@ -1184,16 +1391,19 @@ export default function CityAdminDashboard() {
       {isEventModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 dark:bg-slate-900 shadow-xl border border-slate-200 dark:border-slate-800">
-            <h3 className="text-lg font-bold mb-4">{editingEvent ? "Edit Event" : "Create Event"}</h3>
+            <h3 className="text-lg font-bold mb-1">{editingEvent ? "Edit City Event" : "Create City Event"}</h3>
+            <p className="text-xs text-slate-500 mb-4">Schedule a public community event or lecture in {cityName}.</p>
+
             <form onSubmit={handleSaveEvent} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold mb-1">Event Title</label>
                 <input
                   type="text"
                   required
+                  placeholder="e.g. Annual Seerah Conference"
                   value={eventForm.title}
                   onChange={(e) => setEventForm({...eventForm, title: e.target.value})}
-                  className="w-full rounded-lg border-slate-300 dark:bg-slate-800 py-2 px-3"
+                  className="w-full rounded-lg border-slate-300 dark:bg-slate-800 py-2 px-3 text-sm"
                 />
               </div>
 
@@ -1202,9 +1412,10 @@ export default function CityAdminDashboard() {
                 <textarea
                   required
                   rows={3}
+                  placeholder="Write event details, agenda, and guidelines for attendees..."
                   value={eventForm.description}
                   onChange={(e) => setEventForm({...eventForm, description: e.target.value})}
-                  className="w-full rounded-lg border-slate-300 dark:bg-slate-800 py-2 px-3"
+                  className="w-full rounded-lg border-slate-300 dark:bg-slate-800 py-2 px-3 text-sm"
                 />
               </div>
 
@@ -1214,9 +1425,10 @@ export default function CityAdminDashboard() {
                   <input
                     type="text"
                     required
+                    placeholder="e.g. Maulana Abdul Rahman"
                     value={eventForm.speaker_name}
                     onChange={(e) => setEventForm({...eventForm, speaker_name: e.target.value})}
-                    className="w-full rounded-lg border-slate-300 dark:bg-slate-800 py-2 px-3"
+                    className="w-full rounded-lg border-slate-300 dark:bg-slate-800 py-2 px-3 text-sm"
                   />
                 </div>
 
@@ -1225,9 +1437,10 @@ export default function CityAdminDashboard() {
                   <input
                     type="text"
                     required
+                    placeholder="e.g. Nanded Islamic Council"
                     value={eventForm.organizer}
                     onChange={(e) => setEventForm({...eventForm, organizer: e.target.value})}
-                    className="w-full rounded-lg border-slate-300 dark:bg-slate-800 py-2 px-3"
+                    className="w-full rounded-lg border-slate-300 dark:bg-slate-800 py-2 px-3 text-sm"
                   />
                 </div>
               </div>
@@ -1240,69 +1453,45 @@ export default function CityAdminDashboard() {
                     required
                     value={eventForm.event_date}
                     onChange={(e) => setEventForm({...eventForm, event_date: e.target.value})}
-                    className="w-full rounded-lg border-slate-300 dark:bg-slate-800 py-2 px-3"
+                    className="w-full rounded-lg border-slate-300 dark:bg-slate-800 py-2 px-3 text-sm"
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold mb-1">Start Time</label>
                   <input
-                    type="text"
+                    type="time"
                     required
-                    placeholder="18:00:00"
                     value={eventForm.event_time}
                     onChange={(e) => setEventForm({...eventForm, event_time: e.target.value})}
-                    className="w-full rounded-lg border-slate-300 dark:bg-slate-800 py-2 px-3"
+                    className="w-full rounded-lg border-slate-300 dark:bg-slate-800 py-2 px-3 text-sm"
                   />
+                  <p className="text-[10px] text-slate-400 mt-0.5">{formatTimeTo12Hour(eventForm.event_time)}</p>
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold mb-1">End Time</label>
                   <input
-                    type="text"
+                    type="time"
                     required
-                    placeholder="19:30:00"
                     value={eventForm.end_time}
                     onChange={(e) => setEventForm({...eventForm, end_time: e.target.value})}
-                    className="w-full rounded-lg border-slate-300 dark:bg-slate-800 py-2 px-3"
+                    className="w-full rounded-lg border-slate-300 dark:bg-slate-800 py-2 px-3 text-sm"
                   />
+                  <p className="text-[10px] text-slate-400 mt-0.5">{formatTimeTo12Hour(eventForm.end_time)}</p>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold mb-1">Venue Address / Location</label>
+                <label className="block text-xs font-semibold mb-1">Venue Location</label>
                 <input
                   type="text"
                   required
-                  placeholder="Mosque Hall, Nanded"
+                  placeholder="e.g. Eidgah Ground / Central Community Hall"
                   value={eventForm.event_location}
                   onChange={(e) => setEventForm({...eventForm, event_location: e.target.value})}
-                  className="w-full rounded-lg border-slate-300 dark:bg-slate-800 py-2 px-3"
+                  className="w-full rounded-lg border-slate-300 dark:bg-slate-800 py-2 px-3 text-sm"
                 />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-center gap-2">
-                  <input
-                    id="registration_required"
-                    type="checkbox"
-                    checked={eventForm.registration_required}
-                    onChange={(e) => setEventForm({...eventForm, registration_required: e.target.checked})}
-                    className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-                  />
-                  <label htmlFor="registration_required" className="text-xs font-semibold">Registration Required</label>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold mb-1">Max Capacity</label>
-                  <input
-                    type="number"
-                    disabled={!eventForm.registration_required}
-                    value={eventForm.max_capacity}
-                    onChange={(e) => setEventForm({...eventForm, max_capacity: parseInt(e.target.value)})}
-                    className="w-full rounded-lg border-slate-300 dark:bg-slate-800 disabled:opacity-50 py-2 px-3"
-                  />
-                </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-4 border-t">
@@ -1315,7 +1504,7 @@ export default function CityAdminDashboard() {
                 </button>
                 <button
                   type="submit"
-                  className="rounded-lg bg-emerald-600 text-white px-4 py-2 text-sm font-semibold hover:bg-emerald-500 transition"
+                  className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-semibold hover:bg-indigo-500 transition"
                 >
                   Save Event
                 </button>

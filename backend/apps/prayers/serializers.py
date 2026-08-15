@@ -14,6 +14,7 @@ class ResolvedPrayerTimingSerializer(serializers.Serializer):
     jumuah_time = serializers.TimeField(format="%H:%M:%S")
     effective_from = serializers.DateField(format="%Y-%m-%d")
     maghrib_congregation_mode = serializers.CharField()
+    maghrib_delay_minutes = serializers.IntegerField(required=False, default=15)
     # Freshness indicator — ISO 8601 UTC timestamp of the last time
     # congregation timings were saved.  Optional: may be absent on records
     # that pre-date this field being surfaced.
@@ -36,6 +37,7 @@ class PrayerTimingSerializer(serializers.ModelSerializer):
             "jumuah_time",
             "effective_from",
             "maghrib_congregation_mode",
+            "maghrib_delay_minutes",
             "updated_by",
             "updated_by_username",
             "created_at",

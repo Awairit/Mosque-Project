@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-
+import { Users, Eye, TrendingUp, UserCheck, ShieldAlert, Building2, ChevronRight } from "lucide-react";
 import { apiRequest } from "@/lib/api/client";
 
 type Activity = {
@@ -21,19 +21,33 @@ type DashboardStats = {
   system_status: string;
 };
 
+type AnalyticsOverview = {
+  total_visits: number;
+  unique_identified_visitors: number;
+  new_visitors: number;
+  returning_visitors: number;
+  period_metrics: {
+    today: number;
+    this_week: number;
+    this_month: number;
+  };
+};
+
 export default function SuperAdminDashboardHome() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [analytics, setAnalytics] = useState<AnalyticsOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     async function fetchStats() {
       try {
-        const data = await apiRequest<DashboardStats>({
-          path: "/platform/dashboard/stats/",
-          method: "GET",
-        });
-        setStats(data);
+        const [statsData, analyticsData] = await Promise.all([
+          apiRequest<DashboardStats>({ path: "/platform/dashboard/stats/", method: "GET" }),
+          apiRequest<AnalyticsOverview>({ path: "/analytics/overview/", method: "GET" }),
+        ]);
+        setStats(statsData);
+        setAnalytics(analyticsData);
       } catch (err) {
         console.error("Failed to load platform stats:", err);
         setError("Could not retrieve platform statistics. Please try again.");
@@ -121,7 +135,7 @@ export default function SuperAdminDashboardHome() {
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Platform Control Panel</h1>
-        <p className="text-sm text-slate-500 mt-1">Operational status and system metrics overview.</p>
+        <p className="text-sm text-slate-500 mt-1">Operational status, system metrics, and visitor adoption analytics.</p>
       </div>
 
       {/* Grid of Metric stats cards */}
@@ -142,6 +156,66 @@ export default function SuperAdminDashboardHome() {
           </div>
         ))}
       </div>
+
+      {/* Feature B — Privacy-Conscious Visitor Analytics Panel */}
+      {analytics && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-4 border-b border-slate-100 dark:border-slate-800 gap-2">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Eye className="h-4 w-4 text-emerald-600" /> Platform Visitor Analytics
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Privacy-conscious anonymous visitor session tracking (Zero PII collected).
+              </p>
+            </div>
+            <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
+              Active Tracking
+            </span>
+          </div>
+
+          <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-4 dark:border-slate-800 dark:bg-slate-800/40">
+              <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+                <Eye className="h-4 w-4 text-emerald-600" /> Total Visits
+              </div>
+              <p className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">{analytics.total_visits}</p>
+              <div className="mt-2 text-[11px] text-slate-400 flex justify-between">
+                <span>Today: <strong>{analytics.period_metrics.today}</strong></span>
+                <span>This Week: <strong>{analytics.period_metrics.this_week}</strong></span>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-4 dark:border-slate-800 dark:bg-slate-800/40">
+              <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+                <Users className="h-4 w-4 text-blue-600" /> Unique Identified Visitors
+              </div>
+              <p className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">
+                {analytics.unique_identified_visitors}
+              </p>
+              <p className="mt-2 text-[11px] text-slate-400">Unique anonymous device tokens</p>
+            </div>
+
+            <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-4 dark:border-slate-800 dark:bg-slate-800/40">
+              <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+                <TrendingUp className="h-4 w-4 text-amber-600" /> New Visitors
+              </div>
+              <p className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">{analytics.new_visitors}</p>
+              <p className="mt-2 text-[11px] text-slate-400">First recognized device sessions</p>
+            </div>
+
+            <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-4 dark:border-slate-800 dark:bg-slate-800/40">
+              <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+                <UserCheck className="h-4 w-4 text-purple-600" /> Returning Visitors
+              </div>
+              <p className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">
+                {analytics.returning_visitors}
+              </p>
+              <p className="mt-2 text-[11px] text-slate-400">Repeat recognized device visits</p>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Primary Panels section (Layout Split) */}
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr] items-start">
@@ -184,13 +258,19 @@ export default function SuperAdminDashboardHome() {
 
           <div className="mt-4 space-y-2.5">
             <Link
+              href="/super-admin/dashboard/city-admins"
+              className="flex items-center justify-between rounded-xl border border-slate-100 p-3.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800/50"
+            >
+              <span>Manage City Admins</span>
+              <ChevronRight className="h-4 w-4 text-slate-400" />
+            </Link>
+
+            <Link
               href="/super-admin/dashboard/mosques"
               className="flex items-center justify-between rounded-xl border border-slate-100 p-3.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800/50"
             >
               <span>Approve Mosque Requests</span>
-              <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
+              <ChevronRight className="h-4 w-4 text-slate-400" />
             </Link>
 
             <Link
@@ -198,9 +278,7 @@ export default function SuperAdminDashboardHome() {
               className="flex items-center justify-between rounded-xl border border-slate-100 p-3.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800/50"
             >
               <span>Add New City</span>
-              <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
+              <ChevronRight className="h-4 w-4 text-slate-400" />
             </Link>
 
             <Link
@@ -208,29 +286,7 @@ export default function SuperAdminDashboardHome() {
               className="flex items-center justify-between rounded-xl border border-slate-100 p-3.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800/50"
             >
               <span>Upload Prayer Timetable</span>
-              <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-            </Link>
-
-            <Link
-              href="/super-admin/dashboard/cities"
-              className="flex items-center justify-between rounded-xl border border-slate-100 p-3.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800/50"
-            >
-              <span>Manage Cities</span>
-              <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-            </Link>
-
-            <Link
-              href="/super-admin/dashboard/settings"
-              className="flex items-center justify-between rounded-xl border border-slate-100 p-3.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800/50"
-            >
-              <span>Platform Settings</span>
-              <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
+              <ChevronRight className="h-4 w-4 text-slate-400" />
             </Link>
           </div>
         </section>

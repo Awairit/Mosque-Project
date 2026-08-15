@@ -13,6 +13,8 @@ class Mosque(TimeStampedModel):
     class MosqueStatus(models.TextChoices):
         ACTIVE = "active", "Active"
         INACTIVE = "inactive", "Inactive"
+        ARCHIVED = "archived", "Archived"
+
 
     class MosqueType(models.TextChoices):
         JAMA_MASJID = "jama_masjid", "Jama Masjid (Juma Mosque)"
@@ -134,7 +136,7 @@ class Mosque(TimeStampedModel):
             if city_obj:
                 self.city_relation = city_obj
                 self.city = city_obj.name
-                
+
         super().save(*args, **kwargs)
 
 
@@ -164,6 +166,12 @@ class MosqueRegistrationRequest(TimeStampedModel):
     address = models.TextField(blank=True)
     google_maps_link = models.URLField(max_length=500, blank=True)
     google_maps_url = models.URLField(max_length=500, blank=True, null=True)
+    latitude = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True
+    )
+    longitude = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True
+    )
     women_prayer_available = models.BooleanField(default=False)
     notes = models.TextField(blank=True)
 
@@ -228,6 +236,15 @@ class MosqueRegistrationRequest(TimeStampedModel):
         return f"{self.mosque_name} ({self.mobile_number})"
 
     def save(self, *args, **kwargs):
+        # Auto-extract coordinates if missing
+        url_target = self.google_maps_url or self.google_maps_link
+        if url_target and (self.latitude is None or self.longitude is None):
+            from apps.mosques.services import extract_coordinates_from_url
+            lat, lon = extract_coordinates_from_url(url_target)
+            if lat is not None and lon is not None:
+                self.latitude = lat
+                self.longitude = lon
+
         if self.city_relation_id:
             from apps.locations.models import City
             city_obj = City.objects.filter(id=self.city_relation_id).first()
@@ -254,13 +271,29 @@ class MosqueRegistrationRequest(TimeStampedModel):
 class MosqueOperatingSchedule(TimeStampedModel):
     """Operating schedule configuration for a Mosque."""
 
+    SCHEDULE_MODE_CHOICES = [
+        ("24_HOURS", "24 Hours"),
+        ("SALAH_BASED", "Salah-Based Schedule"),
+        ("GENERAL", "General Open-Close"),
+    ]
+
     mosque = models.OneToOneField(
         Mosque,
         on_delete=models.CASCADE,
         related_name="operating_schedule",
     )
+    schedule_mode = models.CharField(
+        max_length=20,
+        choices=SCHEDULE_MODE_CHOICES,
+        default="SALAH_BASED",
+    )
     open_24_hours = models.BooleanField(default=False)
 
+    # General Open -> Close Mode
+    general_open_time = models.TimeField(null=True, blank=True)
+    general_close_time = models.TimeField(null=True, blank=True)
+
+    # Salah-Based Operating Windows
     fajr_open = models.TimeField(null=True, blank=True)
     fajr_close = models.TimeField(null=True, blank=True)
 
@@ -290,16 +323,75 @@ class MosqueOperatingSchedule(TimeStampedModel):
     def __str__(self) -> str:
         return f"Schedule for {self.mosque.mosque_name}"
 
+    def save(self, *args, **kwargs):
+        # Synchronize legacy open_24_hours boolean with schedule_mode
+        if not self.open_24_hours and self.schedule_mode == "24_HOURS":
+            self.schedule_mode = "SALAH_BASED"
+        elif self.open_24_hours and self.schedule_mode != "24_HOURS":
+            self.schedule_mode = "24_HOURS"
+
+        if self.schedule_mode == "24_HOURS":
+            self.open_24_hours = True
+        else:
+            self.open_24_hours = False
+
+        super().save(*args, **kwargs)
+
+
+
     def get_current_status(self) -> dict:
         """Calculate the current open/closed status using local timezone time."""
-        if self.open_24_hours:
+        if self.open_24_hours or self.schedule_mode == "24_HOURS":
             return {
                 "is_open": True,
                 "opens_at": None,
                 "closes_at": None,
             }
 
-        # Check if any window is configured
+        import django.utils.timezone as django_timezone
+        from zoneinfo import ZoneInfo
+        from apps.mosques.services import MosqueAvailabilityEngine
+
+        city_ref = self.mosque.city_relation if self.mosque.city_relation else self.mosque.city
+        tz_name = MosqueAvailabilityEngine.get_city_timezone(city_ref)
+
+        now = django_timezone.now().astimezone(ZoneInfo(tz_name))
+        current_time = now.time()
+
+        # Mode 2: General Open -> Close Mode
+        if self.schedule_mode == "GENERAL":
+            open_t = self.general_open_time
+            close_t = self.general_close_time
+
+            if open_t is None or close_t is None:
+                return {
+                    "is_open": False,
+                    "opens_at": None,
+                    "closes_at": None,
+                    "message": "General operating schedule not fully configured.",
+                }
+
+            is_inside = False
+            if open_t <= close_t:
+                is_inside = (open_t <= current_time <= close_t)
+            else:
+                # Overnight window (e.g. 10:00 PM to 02:00 AM)
+                is_inside = (current_time >= open_t or current_time <= close_t)
+
+            if is_inside:
+                return {
+                    "is_open": True,
+                    "opens_at": None,
+                    "closes_at": close_t.strftime("%I:%M %p"),
+                }
+            else:
+                return {
+                    "is_open": False,
+                    "opens_at": open_t.strftime("%I:%M %p"),
+                    "closes_at": None,
+                }
+
+        # Mode 3: Salah-Based Operating Schedule (Existing)
         windows = [
             ("fajr", self.fajr_open, self.fajr_close),
             ("dhuhr", self.dhuhr_open, self.dhuhr_close),
@@ -320,16 +412,6 @@ class MosqueOperatingSchedule(TimeStampedModel):
                 "closes_at": None,
                 "message": "No operating schedule configured yet.",
             }
-
-        import django.utils.timezone as django_timezone
-        from zoneinfo import ZoneInfo
-        from apps.mosques.services import MosqueAvailabilityEngine
-
-        city_ref = self.mosque.city_relation if self.mosque.city_relation else self.mosque.city
-        tz_name = MosqueAvailabilityEngine.get_city_timezone(city_ref)
-
-        now = django_timezone.now().astimezone(ZoneInfo(tz_name))
-        current_time = now.time()
 
         # Check if we are inside any window
         for name, open_t, close_t in valid_windows:
@@ -364,6 +446,7 @@ class MosqueOperatingSchedule(TimeStampedModel):
             "opens_at": next_open.strftime("%I:%M %p"),
             "closes_at": None,
         }
+
 
 
 class MosquePhoto(TimeStampedModel):
@@ -606,65 +689,3 @@ class NotificationJob(TimeStampedModel):
     def __str__(self) -> str:
         return f"{self.channel} job for {self.recipient} - status: {self.status}"
 
-
-from django.db.models.signals import post_save
-from django.dispatch import receiver
-
-@receiver(post_save, sender=MosqueAnnouncement)
-def handle_announcement_published(sender, instance, created, **kwargs):
-    if instance.status == "published" and instance.is_active:
-        priority = NotificationJob.Priority.HIGH if instance.announcement_type == "emergency" else NotificationJob.Priority.NORMAL
-        recipient = "+919999999999"
-        message = f"Announcement: {instance.title} - {instance.short_summary or instance.content[:100]}"
-        
-        if not NotificationJob.objects.filter(
-            recipient=recipient,
-            title=instance.title,
-            channel="whatsapp"
-        ).exists():
-            job = NotificationJob.objects.create(
-                recipient=recipient,
-                channel="whatsapp",
-                title=instance.title,
-                message=message,
-                priority=priority,
-                status=NotificationJob.Status.PENDING
-            )
-            from apps.common.services.notification import notification_service
-            success = notification_service.send_whatsapp(recipient, message)
-            if success:
-                job.status = NotificationJob.Status.SENT
-            else:
-                job.status = NotificationJob.Status.FAILED
-                job.error_message = "Failed to dispatch via notification_service."
-            job.save()
-
-
-@receiver(post_save, sender=MosqueEvent)
-def handle_event_published(sender, instance, created, **kwargs):
-    if instance.status == "published" and instance.is_active:
-        priority = NotificationJob.Priority.NORMAL
-        recipient = "+919999999999"
-        message = f"New Event: {instance.title} scheduled on {instance.event_date} at {instance.event_time}"
-        
-        if not NotificationJob.objects.filter(
-            recipient=recipient,
-            title=instance.title,
-            channel="whatsapp"
-        ).exists():
-            job = NotificationJob.objects.create(
-                recipient=recipient,
-                channel="whatsapp",
-                title=instance.title,
-                message=message,
-                priority=priority,
-                status=NotificationJob.Status.PENDING
-            )
-            from apps.common.services.notification import notification_service
-            success = notification_service.send_whatsapp(recipient, message)
-            if success:
-                job.status = NotificationJob.Status.SENT
-            else:
-                job.status = NotificationJob.Status.FAILED
-                job.error_message = "Failed to dispatch via notification_service."
-            job.save()

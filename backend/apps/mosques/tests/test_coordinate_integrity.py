@@ -203,3 +203,115 @@ class BackfillCommandTests(TestCase):
 
         self.assertAlmostEqual(float(mosque.latitude), lat_after_first)
         self.assertIn("Found 0 mosque(s)", out2.getvalue())
+
+
+class MosqueListingDistanceSortingTests(TestCase):
+    """Targeted regression tests for Mosque Listing & Distance Sorting (Step 13)."""
+
+    def setUp(self):
+        from apps.locations.models import City
+        self.city_nanded, _ = City.objects.get_or_create(
+            name="Nanded",
+            defaults={"latitude": 19.138300, "longitude": 77.321000},
+        )
+        self.city_pune, _ = City.objects.get_or_create(
+            name="Pune",
+            defaults={"latitude": 18.520400, "longitude": 73.856700},
+        )
+
+        # Nearby Mosque A (1 km away from user at 19.1500, 77.3300)
+        self.mosque_a = Mosque.objects.create(
+            mosque_name="Mosque A 1km",
+            city="Nanded",
+            city_relation=self.city_nanded,
+            latitude=19.159000,
+            longitude=77.330000,
+            mosque_status=Mosque.MosqueStatus.ACTIVE,
+        )
+
+        # Nearby Mosque B (5 km away)
+        self.mosque_b = Mosque.objects.create(
+            mosque_name="Mosque B 5km",
+            city="Nanded",
+            city_relation=self.city_nanded,
+            latitude=19.195000,
+            longitude=77.330000,
+            mosque_status=Mosque.MosqueStatus.ACTIVE,
+        )
+
+        # Distant Mosque (372 km away in Pune)
+        self.mosque_distant = Mosque.objects.create(
+            mosque_name="Distant Mosque 372km",
+            city="Pune",
+            city_relation=self.city_pune,
+            latitude=18.520400,
+            longitude=73.856700,
+            mosque_status=Mosque.MosqueStatus.ACTIVE,
+        )
+
+        # Newly registered mosque without explicit lat/lon (falls back to Nanded city coords)
+        self.new_mosque = Mosque.objects.create(
+            mosque_name="New Mosque Fallback",
+            city="Nanded",
+            city_relation=self.city_nanded,
+            mosque_status=Mosque.MosqueStatus.ACTIVE,
+        )
+
+    def test_case_1_and_3_nearby_sorted_before_distant(self):
+        """Case 1 & 3: Nearby mosques (1km, 5km) appear before a 372km distant mosque."""
+        from rest_framework.test import APIRequestFactory
+        from apps.mosques.views import MosqueListAPIView
+
+        factory = APIRequestFactory()
+        request = factory.get("/api/mosques/?lat=19.150000&lon=77.330000")
+        view = MosqueListAPIView.as_view()
+        response = view(request)
+
+        results = response.data["results"]
+        names = [m["mosque_name"] for m in results]
+
+        self.assertIn("Mosque A 1km", names)
+        self.assertIn("Mosque B 5km", names)
+
+        # Verify Mosque A is before Mosque B
+        idx_a = names.index("Mosque A 1km")
+        idx_b = names.index("Mosque B 5km")
+        self.assertLess(idx_a, idx_b)
+
+        # Verify distant mosque comes after nearby mosques if present
+        if "Distant Mosque 372km" in names:
+            idx_distant = names.index("Distant Mosque 372km")
+            self.assertGreater(idx_distant, idx_a)
+            self.assertGreater(idx_distant, idx_b)
+
+    def test_case_2_and_6_newly_registered_approved_mosque_eligible(self):
+        """Case 2 & 6: Newly registered approved mosque appears in public listing with city fallback."""
+        from rest_framework.test import APIRequestFactory
+        from apps.mosques.views import MosqueListAPIView
+
+        factory = APIRequestFactory()
+        request = factory.get("/api/mosques/?lat=19.150000&lon=77.330000")
+        view = MosqueListAPIView.as_view()
+        response = view(request)
+
+        results = response.data["results"]
+        names = [m["mosque_name"] for m in results]
+        self.assertIn("New Mosque Fallback", names)
+
+    def test_case_4_distance_corresponds_to_coordinates(self):
+        """Case 4: Distance returned corresponds to actual coordinates."""
+        from rest_framework.test import APIRequestFactory
+        from apps.mosques.views import MosqueListAPIView
+
+        factory = APIRequestFactory()
+        request = factory.get("/api/mosques/?lat=19.150000&lon=77.330000")
+        view = MosqueListAPIView.as_view()
+        response = view(request)
+
+        results = response.data["results"]
+        mosque_a_data = next(m for m in results if m["mosque_name"] == "Mosque A 1km")
+        # 19.159000, 77.330000 is ~1000m from 19.150000, 77.330000
+        self.assertIsNotNone(mosque_a_data.get("distance"))
+        self.assertGreater(mosque_a_data["distance"], 500)
+        self.assertLess(mosque_a_data["distance"], 2000)
+

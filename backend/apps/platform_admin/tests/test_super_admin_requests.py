@@ -1,4 +1,5 @@
 from django.contrib.auth.models import User
+from django.core.cache import cache
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -6,7 +7,7 @@ from rest_framework.test import APITestCase
 
 from apps.locations.models import City
 from apps.mosques.models import Mosque, MosqueRegistrationRequest
-from apps.accounts.models import MosqueAdmin
+from apps.accounts.models import MosqueAdmin, PasswordAuditLog
 from apps.platform_admin.models import MosqueApprovalLog
 
 
@@ -111,6 +112,51 @@ class SuperAdminRequestsWorkflowTests(APITestCase):
         self.assertEqual(log.action, MosqueApprovalLog.ActionTypes.APPROVE)
         self.assertEqual(log.mosque, mosque)
         self.assertEqual(log.admin, self.super_user)
+
+    def test_reset_approved_mosque_admin_password_success(self):
+        self.client.force_authenticate(user=self.super_user)
+        approve_response = self.client.post(self.approve_url)
+        self.assertEqual(approve_response.status_code, status.HTTP_200_OK)
+        old_temp_password = approve_response.data["temp_password"]
+
+        reset_url = reverse("platform-admin-request-reset-password", args=[self.pending_req.id])
+        reset_response = self.client.post(reset_url)
+        self.assertEqual(reset_response.status_code, status.HTTP_200_OK)
+        self.assertIn("temp_password", reset_response.data)
+        self.assertEqual(reset_response.data["username"], "+919999999999")
+
+        user = User.objects.get(username="+919999999999")
+        mosque_admin = MosqueAdmin.objects.get(user=user)
+        self.assertTrue(user.check_password(reset_response.data["temp_password"]))
+        self.assertTrue(mosque_admin.must_change_password)
+        self.assertIsNotNone(mosque_admin.temporary_password_expires_at)
+        self.assertIsNotNone(mosque_admin.last_password_reset_at)
+        self.assertTrue(
+            PasswordAuditLog.objects.filter(
+                user=user,
+                performed_by=self.super_user,
+                action=PasswordAuditLog.ActionTypes.RESET,
+            ).exists()
+        )
+
+        self.client.credentials()
+        self.client.logout()
+        cache.clear()
+        login_url = reverse("auth-login")
+        old_login_response = self.client.post(
+            login_url,
+            {"mobile_number": "+919999999999", "password": old_temp_password},
+            format="json",
+        )
+        self.assertEqual(old_login_response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        new_login_response = self.client.post(
+            login_url,
+            {"mobile_number": "+919999999999", "password": reset_response.data["temp_password"]},
+            format="json",
+        )
+        self.assertEqual(new_login_response.status_code, status.HTTP_200_OK)
+        self.assertTrue(new_login_response.data["must_change_password"])
 
     def test_reject_request_requires_reason(self):
         self.client.force_authenticate(user=self.super_user)

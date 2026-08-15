@@ -15,8 +15,12 @@
 
 html {
   min-height: 100%;
+}
+
+html:focus-within {
   scroll-behavior: smooth;
 }
+
 
 body {
   min-height: 100vh;
@@ -65,4 +69,12 @@ button:disabled {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }

@@ -28,8 +28,9 @@ type RootLayoutProps = {
 
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
-    <html lang="en">
-      <body className="flex flex-col min-h-screen">
+    <html lang="en" suppressHydrationWarning>
+      <body className="flex flex-col min-h-screen" suppressHydrationWarning>
+
         <GlobalHeader />
         <div className="flex-grow">{children}</div>
         <footer className="w-full border-t border-slate-200 bg-white py-6 dark:bg-slate-900 dark:border-slate-800">

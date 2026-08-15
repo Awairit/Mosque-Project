@@ -176,6 +176,9 @@ class MosqueRegistrationRequestAdmin(admin.ModelAdmin):
                     "city_relation",
                     "address",
                     "google_maps_link",
+                    "google_maps_url",
+                    "latitude",
+                    "longitude",
                     "women_prayer_available",
                     "notes",
                 )
@@ -195,99 +198,36 @@ class MosqueRegistrationRequestAdmin(admin.ModelAdmin):
         ),
     )
 
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        if obj.status == MosqueRegistrationRequest.Status.APPROVED:
+            from apps.mosques.services import approve_mosque_registration_request
+            user = request.user if request and hasattr(request, "user") else None
+            approve_mosque_registration_request(obj, approved_by_user=user)
+
     @admin.action(description="Approve selected requests")
     def approve_selected_requests(self, request, queryset):
-        created_count = 0
+        from apps.mosques.services import approve_mosque_registration_request
+        from django.contrib.auth.models import User
         approved_count = 0
+        user = request.user if request and hasattr(request, "user") and isinstance(request.user, User) else None
 
         for registration_request in queryset:
-            # Copy google_maps_url from request
-            req_url = registration_request.google_maps_url or registration_request.google_maps_link
-
-            # 1. Idempotently get or create the Mosque
-            mosque_qs = Mosque.objects.filter(
-                mosque_name__iexact=registration_request.mosque_name,
-                address__iexact=registration_request.address,
-            )
-            if registration_request.city_relation:
-                mosque = mosque_qs.filter(city_relation=registration_request.city_relation).first()
-            else:
-                mosque = mosque_qs.filter(city__iexact=registration_request.city).first()
-
-            if not mosque:
-                mosque = Mosque.objects.create(
-                    mosque_name=registration_request.mosque_name,
-                    city=registration_request.city,
-                    city_relation=registration_request.city_relation,
-                    address=registration_request.address,
-                    google_maps_url=req_url,
-                    women_prayer_available=registration_request.women_prayer_available,
-                    mosque_status=Mosque.MosqueStatus.ACTIVE,
-                )
-                created_count += 1
-            else:
-                if req_url:
-                    mosque.google_maps_url = req_url
-            
-            # Resolve coordinates from Google Maps URL
+            result = approve_mosque_registration_request(registration_request, approved_by_user=user)
+            mosque = result["mosque"]
             if mosque.google_maps_url and (mosque.latitude is None or mosque.longitude is None):
-                from apps.mosques.services import extract_coordinates_from_url
-                lat, lon = extract_coordinates_from_url(mosque.google_maps_url)
-                if lat is not None and lon is not None:
-                    mosque.latitude = lat
-                    mosque.longitude = lon
-                else:
-                    if request:
-                        self.message_user(
-                            request,
-                            f"Warning: Could not extract coordinates from URL for '{mosque.mosque_name}'. Please verify the URL or enter coordinates manually.",
-                            level="warning"
-                        )
-            
-            mosque.save()
-
-            # 2. Idempotently create MosqueAdmin and User
-            admin_profile = AccountsMosqueAdmin.objects.filter(
-                mobile_number=registration_request.mobile_number
-            ).first()
-
-            if not admin_profile:
-                user = User.objects.filter(username=registration_request.mobile_number).first()
-                temp_password = None
-                if not user:
-                    temp_password = get_random_string(length=12)
-                    user = User.objects.create_user(
-                        username=registration_request.mobile_number,
-                        password=temp_password,
-                    )
-
-                admin_profile = AccountsMosqueAdmin.objects.create(
-                    user=user,
-                    mosque=mosque,
-                    mobile_number=registration_request.mobile_number,
-                    is_active=True,
-                )
-
-                if temp_password and request:
+                if request and hasattr(self, "message_user"):
                     self.message_user(
                         request,
-                        (
-                            f"Created admin account for '{mosque.mosque_name}'. "
-                            f"Username/Phone: {registration_request.mobile_number}, "
-                            f"Temporary Password: {temp_password}"
-                        ),
-                        level="info",
+                        f"Warning: Could not extract coordinates from URL for '{mosque.mosque_name}'. Please verify the URL or enter coordinates manually.",
+                        level="warning"
                     )
+            approved_count += 1
 
-            if registration_request.status != MosqueRegistrationRequest.Status.APPROVED:
-                registration_request.status = MosqueRegistrationRequest.Status.APPROVED
-                registration_request.save(update_fields=["status", "updated_at"])
-                approved_count += 1
-
-        if request:
+        if request and hasattr(self, "message_user"):
             self.message_user(
                 request,
-                f"Approved {approved_count} request(s). Created {created_count} mosque record(s).",
+                f"Approved {approved_count} request(s) and materialized corresponding Mosque and MosqueAdmin records.",
             )
 
     @admin.action(description="Reject selected requests")
